@@ -1,0 +1,124 @@
+{
+  "event": {
+    "id": "fx-major",
+    "name": "Fixture Masters 2026",
+    "tier": "s",
+    "stages": [
+      { "id": "swiss", "name": "Swiss Stage", "kind": "swiss", "position": 0 },
+      { "id": "playoffs", "name": "Playoffs", "kind": "double_elim", "position": 1 }
+    ]
+  },
+  "teams": [
+    { "id": "aur", "name": "Aurora Wolves", "acronym": "AUR", "country": "SE" },
+    { "id": "bas", "name": "Basalt Gaming", "acronym": "BAS", "country": "DE" },
+    { "id": "cin", "name": "Cinder Esports", "acronym": "CIN", "country": "PL" },
+    { "id": "dun", "name": "Dune Raiders", "acronym": "DUN", "country": "BR" },
+    { "id": "eck", "name": "Echo Kings", "acronym": "ECK", "country": "DK" },
+    { "id": "fjo", "name": "Fjord Five", "acronym": "FJO", "country": "NO" },
+    { "id": "gla", "name": "Glacier Union", "acronym": "GLA", "country": "FI" },
+    { "id": "hal", "name": "Halcyon Club", "acronym": "HAL", "country": "FR" }
+  ],
+  "matches": [
+    {
+      "id": "sw-r1-1", "stage": "swiss", "format": "bo1", "start": 30,
+      "team_a": "aur", "team_b": "hal",
+      "maps": [{ "name": "Mirage", "rounds": [13, 9] }]
+    },
+    {
+      "id": "sw-r1-2", "stage": "swiss", "format": "bo1", "start": 30,
+      "team_a": "bas", "team_b": "gla",
+      "maps": [{ "name": "Ancient", "rounds": [8, 13] }]
+    },
+    {
+      "id": "sw-r1-3", "stage": "swiss", "format": "bo1", "start": 90,
+      "team_a": "cin", "team_b": "fjo",
+      "maps": [{ "name": "Nuke", "rounds": [13, 11] }]
+    },
+    {
+      "id": "sw-r1-4", "stage": "swiss", "format": "bo1", "start": 90,
+      "team_a": "dun", "team_b": "eck",
+      "cancel_at": 60,
+      "maps": []
+    },
+    {
+      "id": "sw-r2-1", "stage": "swiss", "format": "bo3", "start": 180,
+      "team_a": "aur", "team_b": "gla",
+      "maps": [
+        { "name": "Inferno", "rounds": [13, 7] },
+        { "name": "Dust2", "rounds": [14, 16] },
+        { "name": "Train", "rounds": [13, 10] }
+      ]
+    },
+    {
+      "id": "sw-r2-2", "stage": "swiss", "format": "bo3", "start": 180,
+      "team_a": "cin", "team_b": "hal",
+      "maps": [
+        { "name": "Anubis", "rounds": [13, 4] },
+        { "name": "Mirage", "rounds": [13, 11] }
+      ]
+    },
+    {
+      "id": "ub-sf1", "stage": "playoffs", "format": "bo3", "start": 480,
+      "bracket": { "side": "upper", "round": 0, "slot": 0 },
+      "team_a": "aur", "team_b": "fjo",
+      "maps": [
+        { "name": "Nuke", "rounds": [13, 6] },
+        { "name": "Ancient", "rounds": [13, 11] }
+      ]
+    },
+    {
+      "id": "ub-sf2", "stage": "playoffs", "format": "bo3", "start": 480,
+      "bracket": { "side": "upper", "round": 0, "slot": 1 },
+      "team_a": "gla", "team_b": "cin",
+      "maps": [
+        { "name": "Inferno", "rounds": [9, 13] },
+        { "name": "Train", "rounds": [13, 8] },
+        { "name": "Mirage", "rounds": [11, 13] }
+      ]
+    },
+    {
+      "id": "ub-f", "stage": "playoffs", "format": "bo3", "start": 720,
+      "bracket": { "side": "upper", "round": 1, "slot": 0 },
+      "team_a": { "match": "ub-sf1", "outcome": "winner" },
+      "team_b": { "match": "ub-sf2", "outcome": "winner" },
+      "maps": [
+        { "name": "Dust2", "rounds": [13, 10] },
+        { "name": "Anubis", "rounds": [7, 13] },
+        { "name": "Nuke", "rounds": [13, 5] }
+      ]
+    },
+    {
+      "id": "lb-r1", "stage": "playoffs", "format": "bo3", "start": 720,
+      "bracket": { "side": "lower", "round": 0, "slot": 0 },
+      "team_a": { "match": "ub-sf1", "outcome": "loser" },
+      "team_b": { "match": "ub-sf2", "outcome": "loser" },
+      "maps": [
+        { "name": "Ancient", "rounds": [13, 3] },
+        { "name": "Inferno", "rounds": [13, 9] }
+      ]
+    },
+    {
+      "id": "lb-f", "stage": "playoffs", "format": "bo3", "start": 960,
+      "bracket": { "side": "lower", "round": 1, "slot": 0 },
+      "team_a": { "match": "ub-f", "outcome": "loser" },
+      "team_b": { "match": "lb-r1", "outcome": "winner" },
+      "maps": [
+        { "name": "Mirage", "rounds": [10, 13] },
+        { "name": "Train", "rounds": [13, 8] },
+        { "name": "Dust2", "rounds": [13, 11] }
+      ]
+    },
+    {
+      "id": "gf", "stage": "playoffs", "format": "bo5", "start": 1200,
+      "bracket": { "side": "final", "round": 2, "slot": 0 },
+      "team_a": { "match": "ub-f", "outcome": "winner" },
+      "team_b": { "match": "lb-f", "outcome": "winner" },
+      "maps": [
+        { "name": "Inferno", "rounds": [13, 11] },
+        { "name": "Nuke", "rounds": [8, 13] },
+        { "name": "Ancient", "rounds": [19, 17], "minutes": 60 },
+        { "name": "Mirage", "rounds": [13, 6] }
+      ]
+    }
+  ]
+}

@@ -292,6 +292,8 @@ pub fn merge_match(
     };
 
     let locked = cur.is_some_and(|c| c.locked);
+    // Admin state (T05); no source ever sets it.
+    let voided = cur.is_some_and(|c| c.voided);
     let lock_at = if locked {
         cur.and_then(|c| c.lock_at)
     } else {
@@ -310,6 +312,7 @@ pub fn merge_match(
         ended_at,
         lock_at,
         locked,
+        voided,
         maps_won_a,
         maps_won_b,
         winner_team_id,
@@ -591,6 +594,7 @@ mod tests {
     fn missing_groups_keep_current_values_and_locked_keeps_lock_at() {
         let mut current = MatchFields::scheduled(EventId(1), X, Y, MatchFormat::Bo5, Some(at(18)));
         current.locked = true;
+        current.voided = true;
         current.status = MatchStatus::Live;
         let v = view(
             "alpha",
@@ -613,6 +617,7 @@ mod tests {
         assert_eq!(m.fields.scheduled_at, Some(at(20)));
         assert_eq!(m.fields.lock_at, Some(at(18)));
         assert!(m.fields.locked);
+        assert!(m.fields.voided, "admin state is carried over");
     }
 
     #[test]

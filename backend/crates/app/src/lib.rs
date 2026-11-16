@@ -5,13 +5,14 @@ pub mod config;
 pub mod shutdown;
 pub mod telemetry;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::Config;
+use crate::config::{Config, SourceId};
 
 /// Upper bound for the whole shutdown sequence. Docker's default grace period
 /// is 10 s (compose uses 20 s, T16); stay well inside it.
@@ -72,9 +73,55 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         "starting"
     );
 
+    let fixture = config.enabled_sources.contains(&SourceId::Fixture);
+    if fixture && !cfg!(feature = "dev") {
+        anyhow::bail!(
+            "the fixture source exists only in dev builds: run `cargo run --features dev`, \
+             or remove `fixture` from ENABLED_SOURCES"
+        );
+    }
+
     let pool = store::open(&config.database_url)
         .await
         .context("opening the database")?;
+
+    // Domain events from the reconciler; T08, T10 and T11 subscribe here.
+    let bus = sync::EventBus::new();
+    let reconciler = Arc::new(reconciler(&config, pool.clone(), bus.clone()));
+    #[cfg_attr(not(feature = "dev"), allow(unused_mut))]
+    let mut state = api::AppState::new(reconciler.clone(), Arc::new(domain::SystemClock));
+    #[cfg_attr(not(feature = "dev"), allow(unused_mut))]
+    let mut extra_api = axum::Router::new();
+    #[cfg(feature = "dev")]
+    {
+        tracing::warn!("dev build: admin requests are trusted from the X-Dev-User header");
+        state = state.with_admin_auth(Arc::new(api::admin::DevHeaderAuth));
+        if fixture {
+            let driver = Arc::new(
+                api::dev::FixtureDriver::open(
+                    pool.clone(),
+                    reconciler.clone(),
+                    api::dev::Scenario::default_scenario(),
+                    chrono::Utc::now(),
+                )
+                .await
+                .context("opening the fixture scenario")?,
+            );
+            let report = driver
+                .sync()
+                .await
+                .context("loading the fixture scenario")?;
+            tracing::info!(
+                anchor = %driver.anchor(),
+                now = %domain::Clock::now(driver.clock().as_ref()),
+                created = report.created,
+                failed = report.failed,
+                "fixture scenario loaded; advance with POST /api/dev/clock/advance"
+            );
+            state.clock = driver.clock();
+            extra_api = api::dev::routes(driver);
+        }
+    }
 
     let listener = TcpListener::bind(config.bind_addr)
         .await
@@ -86,11 +133,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     let bot_stop = CancellationToken::new();
     let http_stop = CancellationToken::new();
 
-    // Domain events from the reconciler; T08, T10 and T11 subscribe here.
-    let bus = sync::EventBus::new();
     let sync_task = tokio::spawn(sync::run(bus, sync_stop.clone()));
     let bot_task = tokio::spawn(bot::run(bot_stop.clone()));
-    let app = api::router(api::AppState { pool: pool.clone() }, &config.static_dir);
+    let app = api::router_with(state, &config.static_dir, extra_api);
     let mut http_task = tokio::spawn(api::serve(listener, app, http_stop.clone()));
 
     let mut http_finished = false;

@@ -2,14 +2,18 @@
 //!
 //! - [`reconcile`]: turns source DTOs into canonical data, by field
 //!   precedence ([`precedence`]), and emits domain events on the [`bus`].
+//! - [`manual`]: admin overrides (the `manual` source), void and reopen
+//!   (T05).
 //! - The scheduler and budget arrive in T06. For now the worker only idles
 //!   until it is told to stop, so that the shutdown sequence is in place.
 
 pub mod bus;
+pub mod manual;
 pub mod precedence;
 pub mod reconcile;
 
 pub use bus::EventBus;
+pub use manual::{ManualError, ManualService, Outcome, Override, OverrideField};
 pub use precedence::{FieldGroup, MANUAL, Precedence, PrecedenceError};
 pub use reconcile::{ReconcileError, Reconciler, Report};
 

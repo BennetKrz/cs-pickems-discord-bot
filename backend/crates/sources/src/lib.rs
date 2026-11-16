@@ -3,14 +3,17 @@
 //! Adapters only fetch and convert external data into source-neutral DTOs
 //! ([`dto`]); they never touch the database. The reconciler in the `sync`
 //! crate turns DTOs into canonical data. Each adapter lives in its own module
-//! behind a cargo feature: PandaScore (T04), manual and fixture (T05), and
-//! the in-memory [`fake`] adapter for tests.
+//! behind a cargo feature: PandaScore (T04), the dev scenario source
+//! `fixture` (T05), and the in-memory [`fake`] adapter for tests. `manual`
+//! has no adapter: admin overrides live in `sync::manual`.
 //!
 //! See `docs/adr/0004-source-adapters-reconciliation.md`.
 
 pub mod dto;
 #[cfg(any(test, feature = "fake"))]
 pub mod fake;
+#[cfg(any(test, feature = "fixture"))]
+pub mod fixture;
 
 use std::time::Duration;
 

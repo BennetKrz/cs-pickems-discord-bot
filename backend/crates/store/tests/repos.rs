@@ -160,6 +160,7 @@ async fn matches_round_trip_every_field() {
     m.fields.started_at = Some(at(20, 5));
     m.fields.ended_at = Some(at(23, 0));
     m.fields.locked = true;
+    m.fields.voided = true;
     m.fields.maps_won_a = 3;
     m.fields.maps_won_b = 1;
     m.fields.winner_team_id = Some(s.team_a);

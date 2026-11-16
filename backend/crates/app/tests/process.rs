@@ -199,3 +199,50 @@ fn reconcile_replay_runs_and_exits() {
     assert_eq!(out.status.code(), Some(2), "clap usage error");
     assert!(String::from_utf8_lossy(&out.stderr).contains("--replay"));
 }
+
+/// T05: production builds have no dev endpoints, and refuse the fixture
+/// source instead of silently running without it.
+#[cfg(not(feature = "dev"))]
+#[test]
+fn production_build_has_no_dev_endpoints_or_fixture_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let port = free_port();
+    let mut cmd = base_command(dir.path());
+    full_env(&mut cmd, dir.path(), port);
+    let mut child = cmd.spawn().unwrap();
+    wait_for_health(&mut child, port);
+    let (status, body) = http_get(port, "/api/dev/clock").unwrap();
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(status.contains(" 404 "), "status: {status}");
+    assert!(body.contains(r#""error":"not_found""#), "{body}");
+
+    let mut cmd = base_command(dir.path());
+    full_env(&mut cmd, dir.path(), free_port());
+    cmd.env("ENABLED_SOURCES", "fixture");
+    let (out, _) = wait_with_deadline(cmd.spawn().unwrap(), Duration::from_secs(10));
+    let log =
+        String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{log}");
+    assert!(log.contains("--features dev"), "{log}");
+    assert!(!log.contains("HTTP listening"), "{log}");
+}
+
+/// T05: a dev build with the fixture source loads the scenario and serves
+/// the dev clock.
+#[cfg(feature = "dev")]
+#[test]
+fn dev_build_serves_the_fixture_clock() {
+    let dir = tempfile::tempdir().unwrap();
+    let port = free_port();
+    let mut cmd = base_command(dir.path());
+    full_env(&mut cmd, dir.path(), port);
+    cmd.env("ENABLED_SOURCES", "fixture");
+    let mut child = cmd.spawn().unwrap();
+    wait_for_health(&mut child, port);
+    let (status, body) = http_get(port, "/api/dev/clock").unwrap();
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(status.contains(" 200 "), "status: {status}");
+    assert!(body.contains(r#""anchor":"#), "{body}");
+}

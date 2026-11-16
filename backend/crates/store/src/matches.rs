@@ -14,7 +14,7 @@ use crate::{DbResult, Ts};
 macro_rules! field_columns {
     () => {
         "event_id, stage_id, team_a_id, team_b_id, format, status, \
-    scheduled_at, started_at, ended_at, lock_at, locked, maps_won_a, maps_won_b, \
+    scheduled_at, started_at, ended_at, lock_at, locked, voided, maps_won_a, maps_won_b, \
     winner_team_id, bracket_side, round_index, slot_index, \
     feeds_a_from_match_id, feeds_a_from_outcome, feeds_b_from_match_id, feeds_b_from_outcome"
     };
@@ -43,6 +43,7 @@ macro_rules! bind_fields {
             .bind(Ts::opt(f.ended_at))
             .bind(Ts::opt(f.lock_at))
             .bind(f.locked)
+            .bind(f.voided)
             .bind(f.maps_won_a)
             .bind(f.maps_won_b)
             .bind(f.winner_team_id.map(|id| id.0))
@@ -84,6 +85,7 @@ fn from_row(row: SqliteRow) -> DbResult<Match> {
             ended_at: row.try_get("ended_at")?,
             lock_at: row.try_get("lock_at")?,
             locked: row.try_get("locked")?,
+            voided: row.try_get("voided")?,
             maps_won_a: row.try_get("maps_won_a")?,
             maps_won_b: row.try_get("maps_won_b")?,
             winner_team_id: team("winner_team_id")?,
@@ -114,7 +116,7 @@ pub async fn insert(ex: impl SqliteExecutor<'_>, m: &NewMatch) -> DbResult<Match
     let sql = concat!(
         "INSERT INTO matches (",
         field_columns!(),
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id"
     );
     let id: i64 = bind_fields!(sqlx::query_scalar(sql), m)
         .fetch_one(ex)
@@ -129,7 +131,7 @@ pub async fn update(ex: impl SqliteExecutor<'_>, m: &Match) -> DbResult<bool> {
     // Same order as `field_columns!`.
     let sql = "UPDATE matches SET event_id = ?, stage_id = ?, team_a_id = ?, team_b_id = ?, \
         format = ?, status = ?, scheduled_at = ?, started_at = ?, ended_at = ?, lock_at = ?, \
-        locked = ?, maps_won_a = ?, maps_won_b = ?, winner_team_id = ?, bracket_side = ?, \
+        locked = ?, voided = ?, maps_won_a = ?, maps_won_b = ?, winner_team_id = ?, bracket_side = ?, \
         round_index = ?, slot_index = ?, feeds_a_from_match_id = ?, feeds_a_from_outcome = ?, \
         feeds_b_from_match_id = ?, feeds_b_from_outcome = ? WHERE id = ?";
     let res = bind_fields!(sqlx::query(sql), &m.fields)

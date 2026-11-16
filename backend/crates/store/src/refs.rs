@@ -235,3 +235,41 @@ pub async fn list_records(
     .fetch_all(ex)
     .await
 }
+
+/// Removes a link. Returns `false` if it did not exist. Used when the last
+/// manual override of an entity is cleared (T05).
+pub async fn unlink(
+    ex: impl SqliteExecutor<'_>,
+    source: &str,
+    entity_type: EntityType,
+    external_id: &str,
+) -> DbResult<bool> {
+    let res = sqlx::query(
+        "DELETE FROM external_refs WHERE source = ? AND entity_type = ? AND external_id = ?",
+    )
+    .bind(source)
+    .bind(entity_type.as_str())
+    .bind(external_id)
+    .execute(ex)
+    .await?;
+    Ok(res.rows_affected() == 1)
+}
+
+/// Deletes a stored record. Returns `false` if it did not exist. Only for
+/// sources whose records are not fetched data, i.e. `manual` (T05).
+pub async fn delete_record(
+    ex: impl SqliteExecutor<'_>,
+    source: &str,
+    entity_type: EntityType,
+    external_id: &str,
+) -> DbResult<bool> {
+    let res = sqlx::query(
+        "DELETE FROM source_records WHERE source = ? AND entity_type = ? AND external_id = ?",
+    )
+    .bind(source)
+    .bind(entity_type.as_str())
+    .bind(external_id)
+    .execute(ex)
+    .await?;
+    Ok(res.rows_affected() == 1)
+}

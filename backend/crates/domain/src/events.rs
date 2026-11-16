@@ -2,6 +2,7 @@
 //!
 //! The reconciler (T03) emits them on an in-process broadcast channel after
 //! the change is committed, and only when a value actually changed.
+//! Admin actions (T05) emit void, unvoid and reopen the same way.
 //! Consumers: lock (T10), settlement (T11), announcements (T08).
 
 use chrono::{DateTime, Utc};
@@ -30,6 +31,13 @@ pub enum DomainEvent {
     /// The match was finished before and after, and its series or map
     /// result changed.
     ResultCorrected { match_id: MatchId },
+    /// An admin voided the match (T05): it scores no points for anyone.
+    MatchVoided { match_id: MatchId },
+    /// An admin took a void back; the match scores normally again.
+    MatchUnvoided { match_id: MatchId },
+    /// An admin unlocked the match's picks before it went live, e.g. after
+    /// a long postponement (T05).
+    PicksReopened { match_id: MatchId },
 }
 
 impl DomainEvent {
@@ -41,7 +49,10 @@ impl DomainEvent {
             | DomainEvent::MapUpdated { match_id, .. }
             | DomainEvent::MatchFinished { match_id }
             | DomainEvent::MatchCanceled { match_id }
-            | DomainEvent::ResultCorrected { match_id } => *match_id,
+            | DomainEvent::ResultCorrected { match_id }
+            | DomainEvent::MatchVoided { match_id }
+            | DomainEvent::MatchUnvoided { match_id }
+            | DomainEvent::PicksReopened { match_id } => *match_id,
         }
     }
 }

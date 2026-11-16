@@ -49,7 +49,7 @@ The placeholder Discord values are fine for now, because the bot does not connec
 | `DISCORD_GUILD_ID` | no | – | when set, only this server is accepted |
 | `DATABASE_URL` | yes | – | `sqlite://path/to/file.db`; file and directory are created |
 | `PANDASCORE_TOKEN` | if `pandascore` is enabled | – | secret, env only |
-| `ENABLED_SOURCES` | no | `pandascore` | comma-separated: `pandascore`, `manual`, `fixture` |
+| `ENABLED_SOURCES` | no | `pandascore` | comma-separated: `pandascore`, `manual`, `fixture` (`fixture` only in dev builds, see below) |
 | `LOG_FORMAT` | no | `pretty` | `pretty` or `json` |
 | `RUST_LOG` | no | `info` | [`tracing` filter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) |
 | `BIND_ADDR` | no | `0.0.0.0:8080` | |
@@ -75,6 +75,39 @@ curl localhost:8080/healthz        # {"version":"0.1.0","git_sha":"…","db":"ok
 ```
 
 To serve the production build from the backend, run `pnpm build` in `frontend/` and open http://localhost:8080/.
+
+#### Fixture data and the dev clock
+
+To get realistic data without a PandaScore token, run a **dev build** with the fixture source:
+
+```sh
+cd backend && ENABLED_SOURCES=fixture cargo run --features dev
+```
+
+This loads one event with a Swiss stage and a double-elimination playoff (Bo1/Bo3/Bo5, TBD slots, a canceled match, overtime maps). The first match starts 30 minutes after the first load. The clock is frozen and only moves when you advance it. Each move syncs the scenario and emits the normal domain events:
+
+```sh
+curl localhost:8080/api/dev/clock                                  # {"now":…,"anchor":…}
+curl -X POST localhost:8080/api/dev/clock/advance \
+     -H 'content-type: application/json' -d '{"minutes": 60}'
+```
+
+The anchor and the clock are stored in the database, so a restart resumes where you left off. To start over, delete the dev database.
+
+Dev builds also accept admin requests with an `X-Dev-User: <Discord user ID>` header, e.g. a manual score:
+
+```sh
+curl -X PUT localhost:8080/api/admin/matches/1/overrides/series \
+     -H 'content-type: application/json' -H 'X-Dev-User: 300000000000000001' \
+     -d '{"score": [2, 1]}'
+```
+
+Production builds (no `dev` feature) contain none of this:
+- `/api/dev/*` is a 404;
+- admin requests are denied until T07 adds Discord sessions;
+- `ENABLED_SOURCES=fixture` stops the app at startup.
+
+To lint and test the dev wiring too, run `cargo clippy --all-targets --features app/dev -- -D warnings && cargo test --features app/dev`.
 
 `Ctrl-C` or `SIGTERM` stops the app gracefully. It stops the sync worker, closes the bot gateway, drains HTTP and closes the database, all within 8 s.
 
