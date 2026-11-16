@@ -1,0 +1,110 @@
+# Architecture
+
+Only the sync worker calls external data APIs; everything else reads the own SQLite database, which is the single source of truth. Bot, HTTP API, sync worker and reconciler run as tokio tasks in **one Rust binary**.
+
+## System overview
+
+Arrows point from caller to callee.
+
+```mermaid
+flowchart LR
+    subgraph ext[External]
+        client["Discord client<br/>(Activity iframe)"]
+        dapi["Discord API<br/>gateway + REST"]
+        ps["PandaScore API<br/>+ later sources"]
+    end
+
+    subgraph pi["Raspberry Pi · docker compose"]
+        caddy["Caddy<br/>TLS on own domain (80/443)"]
+        subgraph app["app · one Rust binary"]
+            bot["Bot (poise)<br/>commands, posts"]
+            api["HTTP API (axum)<br/>serves the frontend"]
+            sync["Sync worker<br/>budgeted polling"]
+            rec["Reconciler<br/>merges sources"]
+            db[("SQLite (WAL)<br/>single source of truth")]
+        end
+        wt["Watchtower<br/>nickfedor fork"]
+    end
+
+    subgraph ci[CI/CD]
+        gha["GitHub Actions<br/>builds arm64"]
+        ghcr["GHCR<br/>image registry"]
+    end
+
+    client -- "HTTPS via Discord proxy" --> caddy
+    caddy --> api
+    bot --> dapi
+    sync --> ps
+    sync --> rec
+    rec --> db
+    api --> db
+    bot --> db
+    gha -- push --> ghcr
+    wt -- "polls every 5 min" --> ghcr
+    wt -- restarts --> app
+```
+
+## Components
+
+| Component | Crate | Responsibility | Tickets |
+| --- | --- | --- | --- |
+| Domain | `domain` | Types, pick validation, scoring, achievements. Pure functions, no I/O. | T10, T11, P6 |
+| Store | `store` | sqlx repositories and migrations. | T02 |
+| Sources | `sources` | `SourceAdapter` trait and adapters (PandaScore, manual, fixture). Fetch and convert only, never write the DB. | T03–T05 |
+| Sync | `sync` | Scheduler with API budget, reconciler, lock ticker, domain events. | T03, T06 |
+| HTTP API | `api` | Auth (Discord OAuth via Embedded App SDK), JSON API, image proxy, static frontend. | T07, T10, T12–T15 |
+| Bot | `bot` | Slash commands, channel posts, Activity launch. | T08, T09 |
+| App | `app` | Binary: config, wiring, graceful shutdown, CLI subcommands. | T01 |
+| Frontend | `frontend/` | React Activity: Matches, Events, Leaderboard, Me (+ Admin in P5). | T07, T12–T15 |
+
+## Data flow
+
+1. **Sync** (T06) decides which external calls to make, by match state and within the per-source budget.
+2. **Adapters** (T03, T04) return source-neutral DTOs. Raw payloads are stored in `source_records` for replay.
+3. The **reconciler** (T03) maps DTOs to canonical entities via `external_refs`, applies field precedence (`manual` first), and emits **domain events** only on real change: `MatchCreated`, `MatchRescheduled`, `MatchStarted`, `MapUpdated`, `MatchFinished`, `MatchCanceled`, `ResultCorrected`.
+4. Event consumers:
+   - **lock** (T10, plus the lock ticker in T06): picks become read-only at match start;
+   - **settlement** (T11): recompute points for the match, upsert `pick_results`;
+   - **announcements** (T08), **reminders** (P1), **achievements** (P6).
+5. **Bot and Activity** only read the DB, and write picks and settings.
+
+## Key invariants
+
+- Times are UTC end to end; only the frontend converts to local time.
+- Team A/B orientation of a match is fixed at creation; all scores (source data and picks) are stored relative to it. The reconciler flips swapped source data, never the match.
+- Settlement is a recompute from history, never a delta, so corrections and replays are safe.
+- Every identity and guild claim from the browser is re-verified on the server.
+- External IDs never appear in the public API.
+
+## Data model
+
+The canonical schema is specified in [T02](tickets/T02-domain-model-database.md). Main tables: `teams`, `events`, `stages`, `matches`, `maps`, `external_refs`, `source_records`, `users`, `guild_members`, `picks`, `pick_maps`, `pick_revisions`, `pick_results`, `guild_settings`, `followed_events`, `audit_log`, `sync_state`.
+
+## Deployment
+
+- Three compose services on the Pi (T16):
+  - `app`, with no published ports;
+  - `caddy`, publishing 80/443 with automatic Let's Encrypt certificates;
+  - `watchtower`, updating only the labeled `app` container (T17).
+- The Discord Activity URL mapping `/` points to the owner's domain. Discord's proxy forwards Activity requests to Caddy.
+- Images are built in GitHub Actions for arm64 (cross-compiled, not under QEMU) and pushed to GHCR. Watchtower polls the configured tag.
+
+## Risks
+
+| Risk | Effect | Mitigation |
+| --- | --- | --- |
+| PandaScore's free plan lacks per-map round scores or live data | Exact map-score picks can't be settled automatically | T04 spike; manual entry (T05); pending-then-void rule (T11); a second adapter later. Liquipedia's API asks for a named User-Agent and has usage terms. HLTV has no official API; scraping it is fragile and likely against its terms. |
+| Discord Activity APIs change (Entry Point command, launch response, launch parameters) | Launch buttons or deep links break | T08 checks current docs; the pending-view deep link needs no special API. |
+| Public URL for the Pi | The Activity can't load without HTTPS | Own domain, ports 80/443 forwarded, Caddy with automatic certificates; only Caddy is exposed and the host is hardened (T16). DS-Lite or CGNAT connections can't forward IPv4 ports. Use DynDNS if the IP changes. |
+| Unattended updates by Watchtower | A bad release goes live by itself | CI gates, backward-compatible migrations, `IMAGE_TAG` pinning for rollback, backups (P4). |
+| SD-card wear and corruption | Data loss | SSD recommended (T16), backups (P4). |
+
+## Sources
+
+Checked 16 Nov 2026:
+
+- [Watchtower archived on 17 Dec 2025; fork nickfedor/watchtower](https://jacar.es/en/watchtower-automatic-docker-updates/) · [containrrr/watchtower discussion](https://github.com/containrrr/watchtower/discussions/1993)
+- [PandaScore pricing (free plan: 1,000 requests/hour)](https://pandascore.co/pricing) · [PandaScore changelog: 60 requests/min on the free tier](https://developers.pandascore.co/changelog/updated-free-tier-rate-limits) · [PandaScore rate limits](https://developers.pandascore.co/docs/rate-and-connections-limits)
+- [Discord Activities: local development and URL mapping](https://docs.discord.com/developers/activities/development-guides/local-development) · [Discord Activities: networking](https://docs.discord.com/developers/activities/development-guides/networking)
+- [Free esports data sources, incl. Liquipedia API User-Agent requirement](https://sportsapis.dev/esports-api)
+- [HLTV has no official developer API](https://parse.bot/marketplace/b392d518-21a4-4ad2-b311-3872d34d62d6/hltv-org-api)
