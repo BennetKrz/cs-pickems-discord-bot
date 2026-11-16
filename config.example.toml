@@ -19,3 +19,17 @@
 [budget.pandascore]
 per_hour = 500
 per_minute = 30
+
+# Reconciliation (T03, docs/adr/0004-source-adapters-reconciliation.md).
+# Only the primary source creates events, teams and matches; other sources
+# attach to them or wait in the unlinked queue. Default: the first entry of
+# enabled_sources that is not "manual". Env: PRIMARY_SOURCE.
+# primary_source = "pandascore"
+
+# Field precedence per field group, highest first. "manual" (admin
+# overrides) always comes first. Enabled sources a group does not list
+# follow in enabled_sources order. Groups: event, stage, team, teams,
+# format, schedule, status, series, map_names, map_rounds, bracket.
+# [precedence]
+# schedule = ["manual", "pandascore"]
+# map_rounds = ["manual", "pandascore"]

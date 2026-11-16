@@ -173,3 +173,29 @@ fn serves_health_and_frontend_then_stops_cleanly_on_sigterm() {
         assert!(!log.contains(secret), "{secret} leaked:\n{log}");
     }
 }
+
+/// T03: `app reconcile --replay` rebuilds from `source_records` and exits,
+/// without starting the server or calling any API.
+#[test]
+fn reconcile_replay_runs_and_exits() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut cmd = base_command(dir.path());
+    full_env(&mut cmd, dir.path(), free_port());
+    let (out, _) = wait_with_deadline(
+        cmd.args(["reconcile", "--replay"]).spawn().unwrap(),
+        Duration::from_secs(10),
+    );
+    let log =
+        String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "exit {:?}, log:\n{log}", out.status);
+    assert!(log.contains("replay finished"), "{log}");
+    assert!(!log.contains("HTTP listening"), "{log}");
+    assert!(dir.path().join("data/test.db").exists());
+
+    // `reconcile` alone is a usage error.
+    let mut cmd = base_command(dir.path());
+    full_env(&mut cmd, dir.path(), free_port());
+    let out = cmd.arg("reconcile").output().unwrap();
+    assert_eq!(out.status.code(), Some(2), "clap usage error");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("--replay"));
+}

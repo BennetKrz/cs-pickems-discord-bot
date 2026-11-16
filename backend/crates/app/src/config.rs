@@ -110,6 +110,11 @@ pub struct Config {
     /// Request budget per source. Sources without an entry are unbudgeted
     /// (they make no external calls).
     pub budgets: BTreeMap<SourceId, Budget>,
+    /// The only source that creates canonical entities (T03). `None` if
+    /// only `manual` is enabled.
+    pub primary_source: Option<SourceId>,
+    /// Field precedence per field group, from `[precedence]` (T03).
+    pub precedence: sync::Precedence,
 }
 
 /// Everything wrong with the configuration, reported at once.
@@ -171,8 +176,12 @@ struct FileConfig {
     rust_log: Option<String>,
     bind_addr: Option<String>,
     static_dir: Option<String>,
+    primary_source: Option<String>,
     #[serde(default)]
     budget: BTreeMap<String, FileBudget>,
+    /// Field group → sources, highest precedence first.
+    #[serde(default)]
+    precedence: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -351,6 +360,14 @@ pub fn from_sources(
 
     let budgets = budgets(env, file.budget, &mut err);
 
+    // Reconciliation (T03)
+    let primary_source = primary_source(
+        env_get("PRIMARY_SOURCE").or_else(|| non_empty(file.primary_source)),
+        &enabled_sources,
+        &mut err,
+    );
+    let precedence = precedence(file.precedence, &enabled_sources, &mut err);
+
     if !err.is_empty() {
         return Err(err);
     }
@@ -377,6 +394,71 @@ pub fn from_sources(
         bind_addr,
         static_dir,
         budgets,
+        primary_source,
+        precedence,
+    })
+}
+
+/// The primary source: as configured, else the first enabled source that is
+/// not `manual`. It must be enabled and must not be `manual`.
+fn primary_source(
+    configured: Option<String>,
+    enabled: &[SourceId],
+    err: &mut ConfigError,
+) -> Option<SourceId> {
+    let Some(name) = configured else {
+        return enabled.iter().copied().find(|s| *s != SourceId::Manual);
+    };
+    match SourceId::parse(&name) {
+        None => err.invalid.push(format!(
+            "PRIMARY_SOURCE: unknown source `{name}` (known: {})",
+            known_sources()
+        )),
+        Some(SourceId::Manual) => err
+            .invalid
+            .push("PRIMARY_SOURCE: `manual` cannot be the primary source".to_owned()),
+        Some(id) if !enabled.contains(&id) => err.invalid.push(format!(
+            "PRIMARY_SOURCE: `{}` is not in ENABLED_SOURCES",
+            id.as_str()
+        )),
+        Some(id) => return Some(id),
+    }
+    None
+}
+
+/// Builds the field precedence from `[precedence]`. Listed sources that are
+/// not enabled are allowed (and ignored), so one config file works for dev
+/// and production.
+fn precedence(
+    file: BTreeMap<String, Vec<String>>,
+    enabled: &[SourceId],
+    err: &mut ConfigError,
+) -> sync::Precedence {
+    let enabled: Vec<String> = enabled.iter().map(|s| s.as_str().to_owned()).collect();
+    let mut groups = BTreeMap::new();
+    for (key, list) in file {
+        let Some(group) = sync::FieldGroup::parse(&key) else {
+            err.invalid.push(format!(
+                "config file: [precedence] `{key}`: unknown field group (known: {})",
+                sync::FieldGroup::ALL.map(|g| g.as_str()).join(", ")
+            ));
+            continue;
+        };
+        let mut sources = Vec::new();
+        for name in &list {
+            match SourceId::parse(name) {
+                Some(id) => sources.push(id.as_str().to_owned()),
+                None => err.invalid.push(format!(
+                    "config file: [precedence] {key}: unknown source `{name}` (known: {})",
+                    known_sources()
+                )),
+            }
+        }
+        groups.insert(group, sources);
+    }
+    sync::Precedence::new(&enabled, &groups).unwrap_or_else(|e| {
+        err.invalid.push(format!("config file: {e}"));
+        sync::Precedence::from_enabled(&enabled)
     })
 }
 
@@ -732,5 +814,69 @@ mod tests {
             assert!(!dbg.contains(secret), "{secret} leaked in {dbg}");
         }
         assert!(dbg.contains("Secret(***)"));
+    }
+
+    #[test]
+    fn precedence_defaults_to_manual_then_enabled_sources() {
+        let mut e = full_env();
+        e.insert("ENABLED_SOURCES".into(), "fixture,pandascore".into());
+        let c = from_sources(&e, None).unwrap();
+        assert_eq!(c.primary_source, Some(SourceId::Fixture));
+        for g in sync::FieldGroup::ALL {
+            assert_eq!(c.precedence.order(g), ["manual", "fixture", "pandascore"]);
+        }
+    }
+
+    #[test]
+    fn precedence_from_the_config_file() {
+        let mut e = full_env();
+        e.insert("ENABLED_SOURCES".into(), "pandascore,fixture".into());
+        let file = "primary_source = \"fixture\"\n\
+                    [precedence]\n\
+                    schedule = [\"manual\", \"Fixture\"]\n\
+                    map_rounds = [\"fixture\", \"pandascore\"]\n";
+        let c = from_sources(&e, with_file(file)).unwrap();
+        assert_eq!(c.primary_source, Some(SourceId::Fixture));
+        assert_eq!(
+            c.precedence.order(sync::FieldGroup::Schedule),
+            ["manual", "fixture", "pandascore"]
+        );
+        assert_eq!(
+            c.precedence.order(sync::FieldGroup::Series),
+            ["manual", "pandascore", "fixture"]
+        );
+
+        // PRIMARY_SOURCE from the environment wins over the file.
+        e.insert("PRIMARY_SOURCE".into(), "pandascore".into());
+        let c = from_sources(&e, with_file(file)).unwrap();
+        assert_eq!(c.primary_source, Some(SourceId::Pandascore));
+    }
+
+    #[test]
+    fn precedence_validation() {
+        let file = "[precedence]\n\
+                    schedule = [\"pandascore\", \"manual\"]\n\
+                    teams = [\"hltv\"]\n\
+                    rounds = [\"pandascore\"]\n";
+        let err = from_sources(&full_env(), with_file(file)).unwrap_err();
+        let text = err.to_string();
+        assert!(text.contains("unknown field group"), "{text}");
+        assert!(text.contains("unknown source `hltv`"), "{text}");
+        assert!(text.contains("`manual` must come first"), "{text}");
+
+        for (primary, needle) in [
+            ("manual", "cannot be the primary"),
+            ("fixture", "not in ENABLED_SOURCES"),
+            ("nope", "unknown source `nope`"),
+        ] {
+            let mut e = full_env();
+            e.insert("PRIMARY_SOURCE".into(), primary.into());
+            let err = from_sources(&e, None).unwrap_err();
+            assert!(err.to_string().contains(needle), "{err}");
+        }
+
+        let mut e = full_env();
+        e.insert("ENABLED_SOURCES".into(), "manual".into());
+        assert_eq!(from_sources(&e, None).unwrap().primary_source, None);
     }
 }

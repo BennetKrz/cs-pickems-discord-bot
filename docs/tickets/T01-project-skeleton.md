@@ -1,7 +1,7 @@
 # T01 – Project skeleton, configuration and local dev loop
 
 - **Epic:** A – Foundation and data
-- **Status:** in review
+- **Status:** done
 - **Index:** [all tickets](README.md)
 
 **Goal:** both halves build and run, and a developer can iterate locally.

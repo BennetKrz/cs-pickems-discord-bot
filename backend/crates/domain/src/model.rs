@@ -71,6 +71,19 @@ macro_rules! string_enum {
                 }
             }
         }
+
+        impl serde::Serialize for $name {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                s.serialize_str(self.as_str())
+            }
+        }
+
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                let s = <std::borrow::Cow<'de, str> as serde::Deserialize>::deserialize(d)?;
+                s.parse().map_err(serde::de::Error::custom)
+            }
+        }
     };
 }
 
@@ -168,12 +181,43 @@ string_enum! {
 }
 
 string_enum! {
+    /// One of the two teams of a match, relative to some A/B orientation.
+    Side {
+        A => "a",
+        B => "b",
+    }
+}
+
+impl Side {
+    /// The other side.
+    pub fn other(self) -> Side {
+        match self {
+            Side::A => Side::B,
+            Side::B => Side::A,
+        }
+    }
+}
+
+string_enum! {
     /// Canonical entities that can carry external IDs.
     EntityType {
         Team => "team",
         Event => "event",
         Stage => "stage",
         Match => "match",
+    }
+}
+
+string_enum! {
+    /// Why an entity a source reported is waiting in the unlinked queue
+    /// instead of being linked to a canonical entity.
+    UnlinkedReason {
+        /// No canonical entity matched the identity rules.
+        NoMatch => "no_match",
+        /// More than one canonical entity matched.
+        Ambiguous => "ambiguous",
+        /// An entity it depends on (its event or a team) is not linked yet.
+        Dependency => "dependency",
     }
 }
 
@@ -413,6 +457,22 @@ mod tests {
         round_trip(BracketSide::ALL);
         round_trip(FeedOutcome::ALL);
         round_trip(EntityType::ALL);
+        round_trip(Side::ALL);
+        round_trip(UnlinkedReason::ALL);
+    }
+
+    #[test]
+    fn enums_serialize_as_their_string_form() {
+        assert_eq!(
+            serde_json::to_string(&StageKind::DoubleElim).unwrap(),
+            "\"double_elim\""
+        );
+        assert_eq!(
+            serde_json::from_str::<MatchStatus>("\"live\"").unwrap(),
+            MatchStatus::Live
+        );
+        let err = serde_json::from_str::<MatchFormat>("\"bo7\"").unwrap_err();
+        assert!(err.to_string().contains("unknown MatchFormat value `bo7`"));
     }
 
     #[test]

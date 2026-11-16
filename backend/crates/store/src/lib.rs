@@ -14,11 +14,13 @@ pub mod events;
 pub mod guilds;
 pub mod matches;
 pub mod picks;
+pub mod provenance;
 pub mod refs;
 mod row;
 pub mod sync_state;
 pub mod teams;
 mod time;
+pub mod unlinked;
 pub mod users;
 
 use std::path::Path;

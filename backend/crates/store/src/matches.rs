@@ -1,5 +1,6 @@
 //! Matches and their maps.
 
+use chrono::{DateTime, Utc};
 use domain::{
     BracketPos, EventId, Feed, Match, MatchFields, MatchId, MatchMap, NewMatch, StageId, TeamId,
 };
@@ -161,6 +162,37 @@ pub async fn list_for_event(
         " FROM matches WHERE event_id = ? ORDER BY scheduled_at IS NULL, scheduled_at, id"
     ))
     .bind(event_id.0)
+    .try_map(from_row)
+    .fetch_all(ex)
+    .await
+}
+
+/// Matches of an event between two teams (in either order) scheduled within
+/// `[from, to]`, closest to the middle of the window first. For cross-source
+/// identity (T03).
+pub async fn find_between(
+    ex: impl SqliteExecutor<'_>,
+    event_id: EventId,
+    team1: TeamId,
+    team2: TeamId,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+) -> DbResult<Vec<Match>> {
+    let mid = from + (to - from) / 2;
+    sqlx::query(concat!(
+        "SELECT id, ",
+        field_columns!(),
+        " FROM matches WHERE event_id = ?1 \
+           AND ((team_a_id = ?2 AND team_b_id = ?3) OR (team_a_id = ?3 AND team_b_id = ?2)) \
+           AND scheduled_at BETWEEN ?4 AND ?5 \
+         ORDER BY abs(julianday(scheduled_at) - julianday(?6)), id"
+    ))
+    .bind(event_id.0)
+    .bind(team1.0)
+    .bind(team2.0)
+    .bind(Ts(from))
+    .bind(Ts(to))
+    .bind(Ts(mid))
     .try_map(from_row)
     .fetch_all(ex)
     .await
