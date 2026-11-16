@@ -29,7 +29,7 @@ Tickets on the same line can run in parallel.
 
 | ID | Title | Epic | Depends on | Status |
 | --- | --- | --- | --- | --- |
-| [T01](T01-project-skeleton.md) | Project skeleton, configuration and local dev loop | A | – | todo |
+| [T01](T01-project-skeleton.md) | Project skeleton, configuration and local dev loop | A | – | in review |
 | [T02](T02-domain-model-database.md) | Canonical domain model and database | A | T01 | todo |
 | [T03](T03-source-adapters-reconciliation.md) | Data-source adapter framework and reconciliation | A | T02 | todo |
 | [T04](T04-pandascore-adapter.md) | PandaScore adapter | A | T03 | todo |

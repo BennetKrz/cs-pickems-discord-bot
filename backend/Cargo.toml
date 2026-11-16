@@ -1,0 +1,43 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+# internal crates
+domain = { path = "crates/domain" }
+store = { path = "crates/store" }
+sources = { path = "crates/sources" }
+sync = { path = "crates/sync" }
+api = { path = "crates/api" }
+bot = { path = "crates/bot" }
+
+# external crates
+anyhow = "1.0.104"
+axum = "0.8.9"
+dotenvy = "0.15.7"
+toml = "1.2.1"
+http-body-util = "0.1.5"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sqlx = { version = "0.9.0", default-features = false, features = ["sqlite", "runtime-tokio", "migrate", "macros", "json"] }
+tempfile = "3.27.0"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "signal", "net", "time", "sync", "fs"] }
+tokio-util = "0.7.20"
+tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.1", features = ["fs", "trace"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json", "fmt"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

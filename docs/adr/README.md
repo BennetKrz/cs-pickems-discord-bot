@@ -10,3 +10,4 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | --- | --- | --- |
 | [0000](0000-initial-decisions.md) | Initial decisions from planning | accepted |
 | 0001 | PandaScore free-plan coverage (written in T04) | pending |
+| [0002](0002-config-and-runtime-skeleton.md) | Configuration, runtime skeleton and toolchain | accepted |
