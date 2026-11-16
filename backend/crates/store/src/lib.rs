@@ -1,13 +1,41 @@
-//! Database access. Repositories and migrations arrive in T02; for now this
-//! crate opens the SQLite pool and offers a health ping.
+//! Database access: the SQLite pool, migrations and repositories.
+//!
+//! Repositories are free functions per area (`teams`, `matches`, `picks`, …).
+//! Single-statement functions take any [`sqlx::SqliteExecutor`] (a pool, a
+//! connection or a transaction), so callers can compose them inside one
+//! transaction. Functions that need several statements take an
+//! [`sqlx::Acquire`] and open their own (nested) transaction.
+//!
+//! Repositories never read the clock: callers pass `now`, so a fake clock
+//! (T05) works. Conventions are recorded in `docs/adr/0003-database-schema.md`.
+
+pub mod audit;
+pub mod events;
+pub mod guilds;
+pub mod matches;
+pub mod picks;
+pub mod refs;
+mod row;
+pub mod sync_state;
+pub mod teams;
+mod time;
+pub mod users;
 
 use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
+use sqlx::migrate::Migrator;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 
 pub use sqlx::SqlitePool;
+pub use time::{Ts, format_ts};
+
+/// Result type of the repositories.
+pub type DbResult<T> = Result<T, sqlx::Error>;
+
+/// The embedded migrations from `crates/store/migrations`.
+static MIGRATOR: Migrator = sqlx::migrate!();
 
 /// Errors from opening or using the database.
 #[derive(Debug, thiserror::Error)]
@@ -22,6 +50,21 @@ pub enum StoreError {
     },
     #[error("cannot open database: {0}")]
     Connect(#[source] sqlx::Error),
+    #[error("cannot migrate database: {0}")]
+    Migrate(#[source] sqlx::migrate::MigrateError),
+}
+
+/// Applies all pending migrations. Already applied ones are skipped, so this
+/// is safe on every start. Fails if an applied migration was edited.
+pub async fn migrate(pool: &SqlitePool) -> Result<(), StoreError> {
+    MIGRATOR.run(pool).await.map_err(StoreError::Migrate)
+}
+
+/// Opens the pool and applies pending migrations: what the app does at start.
+pub async fn open(database_url: &str) -> Result<SqlitePool, StoreError> {
+    let pool = connect(database_url).await?;
+    migrate(&pool).await?;
+    Ok(pool)
 }
 
 /// Opens a SQLite pool for `database_url`.
