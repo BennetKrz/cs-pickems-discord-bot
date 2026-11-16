@@ -1,0 +1,21 @@
+# Rust
+/backend/target/
+
+# Frontend
+node_modules/
+/frontend/dist/
+/frontend/coverage/
+*.tsbuildinfo
+
+# Local config and data
+.env
+config.toml
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Tooling
+.direnv/
+result
+.DS_Store

@@ -1,7 +1,7 @@
 # T01 – Project skeleton, configuration and local dev loop
 
 - **Epic:** A – Foundation and data
-- **Status:** todo
+- **Status:** in review
 - **Index:** [all tickets](README.md)
 
 **Goal:** both halves build and run, and a developer can iterate locally.
@@ -19,9 +19,17 @@
 
 **Acceptance criteria**
 
-- [ ] `cargo run` starts, and `GET /healthz` returns 200 with `{version, git_sha, db: "ok"}`.
-- [ ] A missing required env var exits with code 1 and names the variable.
-- [ ] SIGTERM ends the process within 10 s without errors in the log.
-- [ ] `pnpm build` output is served by the backend at `/`.
+- [x] `cargo run` starts, and `GET /healthz` returns 200 with `{version, git_sha, db: "ok"}`.
+- [x] A missing required env var exits with code 1 and names the variable.
+- [x] SIGTERM ends the process within 10 s without errors in the log.
+- [x] `pnpm build` output is served by the backend at `/`.
 
 **Out of scope:** Docker (T16), CI (T17).
+
+**Notes**
+
+- Decisions are recorded in [ADR 0002](../adr/0002-config-and-runtime-skeleton.md): a hand-rolled config loader instead of figment, secrets only from env, a stub bot until T08, the shutdown order with an 8 s cap, the Nix devShell, and the TypeScript `~6.0` pin.
+- The acceptance criteria are covered by `backend/crates/app/tests/process.rs`, which runs the real binary: `/healthz`, a missing variable gives exit 1, SIGTERM exits cleanly in under 10 s, and `/` serves the frontend.
+- Follow-up for T08: replace `bot::run` with poise and close the shard manager on cancel.
+- Follow-up for T16: set `STATIC_DIR` in the image, and pass `GIT_SHA` as a build arg, because `.git` is not in the build context.
+- Follow-up: lift the TypeScript pin once typescript-eslint supports TS 7.

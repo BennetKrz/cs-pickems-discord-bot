@@ -1,0 +1,21 @@
+# Optional config file for non-secret settings. Copy to backend/config.toml
+# (or point CONFIG_FILE at it). Keys are the lowercase environment variable
+# names; an environment variable always wins over this file.
+#
+# Secrets (DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN, PANDASCORE_TOKEN) are
+# rejected here: set them as environment variables only.
+
+# discord_client_id = "000000000000000000"
+# discord_guild_id = "000000000000000000"
+# database_url = "sqlite://data/dev.db"
+# enabled_sources = ["pandascore"]
+# log_format = "pretty"       # or "json"
+# rust_log = "info"
+# bind_addr = "0.0.0.0:8080"
+# static_dir = "../frontend/dist"
+
+# Request budget per source, enforced by the sync scheduler (T06).
+# Default: 50% of PandaScore's free plan (1,000/h, 60/min).
+[budget.pandascore]
+per_hour = 500
+per_minute = 30
