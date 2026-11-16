@@ -1,7 +1,7 @@
 # T02 – Canonical domain model and database
 
 - **Epic:** A – Foundation and data
-- **Status:** in review
+- **Status:** done
 - **Index:** [all tickets](README.md)
 
 **Goal:** one schema that is the single source of truth for all reads.

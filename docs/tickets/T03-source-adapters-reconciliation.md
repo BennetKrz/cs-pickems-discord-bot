@@ -1,7 +1,7 @@
 # T03 – Data-source adapter framework and reconciliation
 
 - **Epic:** A – Foundation and data
-- **Status:** todo
+- **Status:** in review
 - **Index:** [all tickets](README.md)
 
 **Goal:** any number of sources feed one canonical model, and the app only ever sees that model.
@@ -19,9 +19,16 @@
 
 **Acceptance criteria**
 
-- [ ] Two fake adapters that disagree resolve per the configured precedence; a test proves it.
-- [ ] A source with swapped team order is stored correctly flipped.
-- [ ] Reconciling the same payload twice changes nothing and emits no events.
-- [ ] Unlinked entities show up in the queue and can be linked; linking merges without duplicates.
+- [x] Two fake adapters that disagree resolve per the configured precedence; a test proves it.
+- [x] A source with swapped team order is stored correctly flipped.
+- [x] Reconciling the same payload twice changes nothing and emits no events.
+- [x] Unlinked entities show up in the queue and can be linked; linking merges without duplicates.
 
 **Notes:** keep adapters in separate modules behind cargo features, so a new source is one module plus one config entry.
+
+Implementation decisions are in [ADR 0004](../adr/0004-source-adapters-reconciliation.md). The owner chose the `{dto, raw}` payload and that only the primary source creates entities. Follow-ups for later tickets:
+
+- **T04:** add the `pandascore` feature and module, implement `SourceAdapter`, pass the original JSON as `raw`, and add `SourceId::Pandascore` to the adapter registry.
+- **T05:** the `manual` service writes `manual` records and links (`external_id` = canonical ID) and calls `Reconciler::refresh_match`. Clearing an override removes the field from the manual DTO. A team correction on a match whose picks name the old team is blocked by the T02 triggers and needs an admin path.
+- **T06:** own the adapter registry, call `ingest_event` before `ingest_matches`, and start the `EventBus` consumers. `sync::run` already receives the bus.
+- **T08:** `/admin link` uses `store::unlinked::list`, `Reconciler::link` and `Reconciler::create_from_unlinked`.

@@ -203,6 +203,22 @@ pub async fn get_record(
     .await
 }
 
+/// All records of one entity type across every source, by source and
+/// external ID. For replay (T03).
+pub async fn list_all_records(
+    ex: impl SqliteExecutor<'_>,
+    entity_type: EntityType,
+) -> DbResult<Vec<SourceRecord>> {
+    sqlx::query(
+        "SELECT source, entity_type, external_id, payload, payload_hash, fetched_at \
+         FROM source_records WHERE entity_type = ? ORDER BY source, external_id",
+    )
+    .bind(entity_type.as_str())
+    .try_map(record_from_row)
+    .fetch_all(ex)
+    .await
+}
+
 /// All records of one source and entity type, for replay (T03).
 pub async fn list_records(
     ex: impl SqliteExecutor<'_>,

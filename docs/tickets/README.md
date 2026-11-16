@@ -29,9 +29,9 @@ Tickets on the same line can run in parallel.
 
 | ID | Title | Epic | Depends on | Status |
 | --- | --- | --- | --- | --- |
-| [T01](T01-project-skeleton.md) | Project skeleton, configuration and local dev loop | A | – | in review |
-| [T02](T02-domain-model-database.md) | Canonical domain model and database | A | T01 | in review |
-| [T03](T03-source-adapters-reconciliation.md) | Data-source adapter framework and reconciliation | A | T02 | todo |
+| [T01](T01-project-skeleton.md) | Project skeleton, configuration and local dev loop | A | – | done |
+| [T02](T02-domain-model-database.md) | Canonical domain model and database | A | T01 | done |
+| [T03](T03-source-adapters-reconciliation.md) | Data-source adapter framework and reconciliation | A | T02 | in review |
 | [T04](T04-pandascore-adapter.md) | PandaScore adapter | A | T03 | todo |
 | [T05](T05-manual-source-fixtures.md) | Manual source, admin overrides and dev fixtures | A | T03 | todo |
 | [T06](T06-sync-scheduler-budget.md) | Sync scheduler and API request budget | A | T03, T04 | todo |
