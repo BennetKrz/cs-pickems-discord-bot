@@ -21,12 +21,13 @@ bot = { path = "crates/bot" }
 # external crates
 anyhow = "1.0.104"
 axum = "0.8.9"
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 dotenvy = "0.15.7"
 toml = "1.2.1"
 http-body-util = "0.1.5"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-sqlx = { version = "0.9.0", default-features = false, features = ["sqlite", "runtime-tokio", "migrate", "macros", "json"] }
+sqlx = { version = "0.9.0", default-features = false, features = ["sqlite", "runtime-tokio", "migrate", "macros", "json", "chrono"] }
 tempfile = "3.27.0"
 thiserror = "2.0.21"
 tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "signal", "net", "time", "sync", "fs"] }

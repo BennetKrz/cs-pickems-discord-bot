@@ -27,7 +27,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         "starting"
     );
 
-    let pool = store::connect(&config.database_url)
+    let pool = store::open(&config.database_url)
         .await
         .context("opening the database")?;
 
