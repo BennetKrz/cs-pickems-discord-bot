@@ -1,0 +1,193 @@
+{
+  "number_of_games": 3,
+  "opponents": [
+    {
+      "type": "Team",
+      "opponent": {
+        "id": 129547,
+        "name": "Detonate",
+        "location": "US",
+        "slug": "detonate",
+        "modified_at": "2026-11-15T13:36:07Z",
+        "acronym": "DTN",
+        "image_url": "https://cdn-api.pandascore.co/images/team/image/129547/145px_detonate_allmode.png",
+        "dark_mode_image_url": null
+      }
+    },
+    {
+      "type": "Team",
+      "opponent": {
+        "id": 139204,
+        "name": "Celestial",
+        "location": "",
+        "slug": "celestial",
+        "modified_at": "2026-11-15T13:36:08Z",
+        "acronym": null,
+        "image_url": "https://cdn-api.pandascore.co/images/team/image/139204/celestial_titan_lightmode.png",
+        "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/139204/celestial_titan_darkmode.png"
+      }
+    }
+  ],
+  "slug": "detonate-vs-celestial-2026-11-15",
+  "scheduled_at": "2026-11-15T01:45:00Z",
+  "winner_id": null,
+  "league_id": 5586,
+  "winner": null,
+  "streams_list": [
+    {
+      "main": false,
+      "language": "en",
+      "embed_url": "https://player.twitch.tv/?channel=fragadelphia",
+      "official": false,
+      "raw_url": "https://www.twitch.tv/fragadelphia"
+    },
+    {
+      "main": true,
+      "language": "en",
+      "embed_url": "https://player.twitch.tv/?channel=austincs",
+      "official": true,
+      "raw_url": "https://www.twitch.tv/austincs"
+    }
+  ],
+  "end_at": null,
+  "original_scheduled_at": "2026-11-15T01:45:00Z",
+  "begin_at": "2026-11-15T01:50:00Z",
+  "modified_at": "2026-11-15T14:00:12Z",
+  "serie_id": 11212,
+  "serie": {
+    "id": 11212,
+    "name": "",
+    "year": 2026,
+    "begin_at": "2026-11-15T01:00:00Z",
+    "end_at": "2026-11-16T03:00:00Z",
+    "winner_id": null,
+    "winner_type": "Team",
+    "slug": "cs-go-austin-lan-2026",
+    "modified_at": "2026-11-15T14:00:12Z",
+    "league_id": 5586,
+    "season": null,
+    "full_name": "2026"
+  },
+  "games": [
+    {
+      "complete": true,
+      "id": 239598,
+      "position": 1,
+      "status": "finished",
+      "length": null,
+      "finished": true,
+      "begin_at": null,
+      "detailed_stats": true,
+      "end_at": null,
+      "forfeit": false,
+      "match_id": 1814195,
+      "winner_type": "Team",
+      "winner": {
+        "id": 129547,
+        "type": "Team"
+      }
+    },
+    {
+      "complete": false,
+      "id": 239599,
+      "position": 2,
+      "status": "running",
+      "length": null,
+      "finished": false,
+      "begin_at": null,
+      "detailed_stats": true,
+      "end_at": null,
+      "forfeit": false,
+      "match_id": 1814195,
+      "winner_type": "Team",
+      "winner": {
+        "id": null,
+        "type": "Team"
+      }
+    },
+    {
+      "complete": false,
+      "id": 239600,
+      "position": 3,
+      "status": "not_started",
+      "length": null,
+      "finished": false,
+      "begin_at": null,
+      "detailed_stats": true,
+      "end_at": null,
+      "forfeit": false,
+      "match_id": 1814195,
+      "winner_type": "Team",
+      "winner": {
+        "id": null,
+        "type": "Team"
+      }
+    }
+  ],
+  "draw": false,
+  "rescheduled": false,
+  "videogame": {
+    "id": 3,
+    "name": "Counter-Strike",
+    "slug": "cs-go"
+  },
+  "status": "running",
+  "forfeit": false,
+  "tournament": {
+    "id": 22466,
+    "name": "Playoffs",
+    "type": "online",
+    "country": null,
+    "begin_at": "2026-11-15T01:00:00Z",
+    "detailed_stats": true,
+    "end_at": "2026-11-16T03:00:00Z",
+    "winner_id": 137510,
+    "winner_type": "Team",
+    "slug": "cs-go-austin-lan-2026-playoffs",
+    "region": "NA",
+    "serie_id": 11212,
+    "modified_at": "2026-11-16T01:51:22Z",
+    "league_id": 5586,
+    "prizepool": "30000 United States Dollar",
+    "tier": "d",
+    "has_bracket": true,
+    "live_supported": false
+  },
+  "results": [
+    {
+      "team_id": 129547,
+      "score": 1
+    },
+    {
+      "team_id": 139204,
+      "score": 0
+    }
+  ],
+  "match_type": "best_of",
+  "winner_type": "Team",
+  "videogame_title": {
+    "id": 13,
+    "name": "Counter-Strike 2",
+    "slug": "cs-2",
+    "videogame_id": 3
+  },
+  "detailed_stats": true,
+  "game_advantage": null,
+  "live": {
+    "supported": false,
+    "url": null,
+    "opens_at": null
+  },
+  "id": 1814195,
+  "name": "Quarterfinal 4: DTN vs Celestial",
+  "league": {
+    "id": 5586,
+    "name": "Austin LAN",
+    "url": null,
+    "slug": "cs-go-austin-lan",
+    "modified_at": "2026-11-15T13:24:17Z",
+    "image_url": null
+  },
+  "tournament_id": 22466,
+  "videogame_version": null
+}

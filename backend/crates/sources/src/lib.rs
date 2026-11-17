@@ -14,6 +14,8 @@ pub mod dto;
 pub mod fake;
 #[cfg(any(test, feature = "fixture"))]
 pub mod fixture;
+#[cfg(any(test, feature = "pandascore"))]
+pub mod pandascore;
 
 use std::time::Duration;
 
@@ -57,6 +59,17 @@ pub enum CallKind {
 pub struct RateLimits {
     pub per_minute: u32,
     pub per_hour: u32,
+}
+
+/// The source's own view of the remaining quota, as last reported (e.g.
+/// PandaScore's `X-Rate-Limit-Remaining`). The scheduler (T06) compares it
+/// with its own budget.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Quota {
+    /// Requests left in the source's current window.
+    pub remaining: u32,
+    /// Requests used in that window, if the source says.
+    pub used: Option<u32>,
 }
 
 /// Errors from an adapter call.
@@ -131,6 +144,12 @@ pub trait SourceAdapter: Send + Sync {
 
     /// Live state of the given matches. Unknown or not-live IDs are skipped.
     async fn fetch_live(&self, ext_ids: &[String]) -> SourceResult<Vec<Sourced<SrcMatch>>>;
+
+    /// The quota the source reported on its last response, if it reports
+    /// one.
+    fn quota(&self) -> Option<Quota> {
+        None
+    }
 
     /// Whether this source declares `cap`.
     fn supports(&self, cap: Capability) -> bool {

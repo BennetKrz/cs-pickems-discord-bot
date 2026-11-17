@@ -9,7 +9,7 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | ADR | Title | Status |
 | --- | --- | --- |
 | [0000](0000-initial-decisions.md) | Initial decisions from planning | accepted |
-| 0001 | PandaScore free-plan coverage (written in T04) | pending |
+| [0001](0001-pandascore-coverage.md) | PandaScore free-plan coverage | accepted |
 | [0002](0002-config-and-runtime-skeleton.md) | Configuration, runtime skeleton and toolchain | accepted |
 | [0003](0003-database-schema.md) | Database schema conventions | accepted |
 | [0004](0004-source-adapters-reconciliation.md) | Source adapters and reconciliation | accepted |

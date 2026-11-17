@@ -1,7 +1,7 @@
 # T05 – Manual source, admin overrides and dev fixtures
 
 - **Epic:** A – Foundation and data
-- **Status:** in review
+- **Status:** done
 - **Index:** [all tickets](README.md)
 
 **Goal:** a fallback when sources are wrong or missing, and realistic test data without API quota.
