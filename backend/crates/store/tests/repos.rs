@@ -13,9 +13,10 @@ use store::audit::AuditRecord;
 use store::guilds::{FollowedEvent, GuildSettings};
 use store::picks::PickResult;
 use store::refs::{ExternalRef, RecordChange, SourceRecord};
+use store::sessions::Session;
 use store::sync_state::SyncState;
 use store::users::{GuildMember, User};
-use store::{Ts, audit, events, guilds, matches, picks, refs, sync_state, teams, users};
+use store::{Ts, audit, events, guilds, matches, picks, refs, sessions, sync_state, teams, users};
 
 #[tokio::test]
 async fn teams_round_trip() {
@@ -874,4 +875,69 @@ async fn match_refs_for_event_lists_one_source() {
             .unwrap(),
         vec![(s.bo3.0, "77".to_owned())]
     );
+}
+
+#[tokio::test]
+async fn sessions_expire_and_follow_their_user() {
+    let db = test_db().await;
+    common::user(&db.pool, ALICE).await;
+    common::user(&db.pool, BOB).await;
+    let session = |hash: char, user: &str, start: u32| Session {
+        token_hash: hash.to_string().repeat(64),
+        user_id: user.into(),
+        guild_id: GUILD.into(),
+        created_at: at(start, 0),
+        expires_at: at(start + 2, 0),
+    };
+    let a = session('a', ALICE, 10);
+    let b = session('b', ALICE, 12);
+    let c = session('c', BOB, 10);
+    for s in [&a, &b, &c] {
+        sessions::create(&db.pool, s).await.unwrap();
+    }
+
+    // Valid strictly before `expires_at`.
+    let hash = a.token_hash.as_str();
+    assert_eq!(
+        sessions::get_valid(&db.pool, hash, at(11, 59))
+            .await
+            .unwrap(),
+        Some(a.clone())
+    );
+    assert_eq!(
+        sessions::get_valid(&db.pool, hash, at(12, 0))
+            .await
+            .unwrap(),
+        None
+    );
+    let unknown = "f".repeat(64);
+    assert_eq!(
+        sessions::get_valid(&db.pool, &unknown, at(10, 0))
+            .await
+            .unwrap(),
+        None
+    );
+
+    // At 12:00, `a` and `c` have expired; `b` stays.
+    assert_eq!(
+        sessions::delete_expired(&db.pool, at(12, 0)).await.unwrap(),
+        2
+    );
+    assert_eq!(
+        sessions::get_valid(&db.pool, &b.token_hash, at(12, 0))
+            .await
+            .unwrap(),
+        Some(b.clone())
+    );
+
+    // Deleting a user deletes their sessions.
+    sqlx::query("DELETE FROM users WHERE discord_user_id = ?")
+        .bind(ALICE)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    assert!(!sessions::delete(&db.pool, &b.token_hash).await.unwrap());
+
+    sessions::create(&db.pool, &c).await.unwrap();
+    assert!(sessions::delete(&db.pool, &c.token_hash).await.unwrap());
 }

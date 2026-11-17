@@ -2,16 +2,19 @@
 //! sync status and a manual resync of an event (T06).
 //!
 //! Every route needs an [`AdminUser`], resolved by the [`AdminAuth`] in the
-//! app state. Until T07 brings Discord sessions, production uses
-//! [`DenyAll`]; dev builds accept an `X-Dev-User` header ([`DevHeaderAuth`]).
+//! app state: in production the session plus the admin rule
+//! ([`crate::auth::AuthService`], T07); dev builds also accept an
+//! `X-Dev-User` header ([`DevHeaderAuth`]).
 //! The handlers only translate HTTP to `sync::ManualService`, which audits
 //! every change with the admin's Discord user ID.
+
+#[cfg(any(test, feature = "dev"))]
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use axum::extract::{FromRequestParts, Path, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
@@ -21,16 +24,40 @@ use store::audit::{self, AuditRecord};
 use sync::{ManualError, Outcome, Override, OverrideField, SyncHandle, SyncStatus};
 
 use crate::AppState;
+pub use crate::error::ApiError;
 
 // ---- authentication ---------------------------------------------------------
 
-/// Why a request is not an admin's.
+/// Why a request is not an admin's (or not signed in).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthError {
-    /// No valid identity (401).
+    /// No valid session (401).
     Unauthenticated(String),
-    /// A valid user who is not an admin (403).
+    /// A signed-in member who is not an admin (403).
     Forbidden(String),
+    /// Discord could not be asked, so admin status is unknown (503).
+    Unavailable(String),
+    /// A database error (500); details are logged where it happened.
+    Internal,
+}
+
+impl From<AuthError> for ApiError {
+    fn from(e: AuthError) -> Self {
+        match e {
+            AuthError::Unauthenticated(m) => {
+                ApiError::new(StatusCode::UNAUTHORIZED, "unauthenticated", m)
+            }
+            AuthError::Forbidden(m) => ApiError::new(StatusCode::FORBIDDEN, "forbidden", m),
+            AuthError::Unavailable(m) => {
+                ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "discord_unavailable", m)
+            }
+            AuthError::Internal => ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal",
+                "database error",
+            ),
+        }
+    }
 }
 
 /// Decides whether a request comes from an admin and who it is.
@@ -40,34 +67,29 @@ pub trait AdminAuth: Send + Sync {
     async fn authenticate(&self, headers: &HeaderMap) -> Result<String, AuthError>;
 }
 
-/// Rejects every request. The production default until T07 adds sessions.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct DenyAll;
-
-#[async_trait]
-impl AdminAuth for DenyAll {
-    async fn authenticate(&self, _headers: &HeaderMap) -> Result<String, AuthError> {
-        Err(AuthError::Unauthenticated(
-            "admin sign-in is not available yet".to_owned(),
-        ))
-    }
-}
-
-/// Dev builds only: trusts an `X-Dev-User: <Discord user ID>` header. Never
+/// Dev builds only: trusts an `X-Dev-User: <Discord user ID>` header, and
+/// falls back to `inner` (the session) when the header is absent. Never
 /// compiled into production builds.
 #[cfg(any(test, feature = "dev"))]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct DevHeaderAuth;
+pub struct DevHeaderAuth {
+    inner: Arc<dyn AdminAuth>,
+}
+
+#[cfg(any(test, feature = "dev"))]
+impl DevHeaderAuth {
+    pub fn new(inner: Arc<dyn AdminAuth>) -> Self {
+        Self { inner }
+    }
+}
 
 #[cfg(any(test, feature = "dev"))]
 #[async_trait]
 impl AdminAuth for DevHeaderAuth {
     async fn authenticate(&self, headers: &HeaderMap) -> Result<String, AuthError> {
-        let user = headers
-            .get("x-dev-user")
-            .and_then(|v| v.to_str().ok())
-            .map(str::trim)
-            .unwrap_or_default();
+        let Some(value) = headers.get("x-dev-user") else {
+            return self.inner.authenticate(headers).await;
+        };
+        let user = value.to_str().map(str::trim).unwrap_or_default();
         if user.is_empty() || !user.bytes().all(|b| b.is_ascii_digit()) {
             return Err(AuthError::Unauthenticated(
                 "dev build: send X-Dev-User with a Discord user ID".to_owned(),
@@ -85,46 +107,13 @@ impl FromRequestParts<AppState> for AdminUser {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        match state.admin_auth.authenticate(&parts.headers).await {
-            Ok(id) => Ok(AdminUser(id)),
-            Err(AuthError::Unauthenticated(m)) => Err(ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "unauthenticated",
-                m,
-            )),
-            Err(AuthError::Forbidden(m)) => {
-                Err(ApiError::new(StatusCode::FORBIDDEN, "forbidden", m))
-            }
-        }
+        Ok(AdminUser(
+            state.admin_auth.authenticate(&parts.headers).await?,
+        ))
     }
 }
 
 // ---- errors -----------------------------------------------------------------
-
-/// A JSON error response: `{"error": code, "message": text}`.
-#[derive(Debug)]
-pub struct ApiError {
-    status: StatusCode,
-    code: &'static str,
-    message: String,
-}
-
-impl ApiError {
-    pub fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
-        Self {
-            status,
-            code,
-            message: message.into(),
-        }
-    }
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let body = serde_json::json!({ "error": self.code, "message": self.message });
-        (self.status, Json(body)).into_response()
-    }
-}
 
 impl From<ManualError> for ApiError {
     fn from(e: ManualError) -> Self {
@@ -482,8 +471,6 @@ async fn resync(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use axum::http::StatusCode;
     use chrono::TimeZone;
     use serde_json::json;
@@ -495,9 +482,15 @@ mod tests {
 
     const ADMIN: &str = "300000000000000001";
 
-    /// A router with one Bo3 from source `alpha` (score 0:0, scheduled), and
-    /// the admin auth `auth`.
-    async fn app(auth: Arc<dyn AdminAuth>) -> (Router, i64, store::SqlitePool, tempfile::TempDir) {
+    /// Wraps the state's admin guard in [`DevHeaderAuth`], as dev builds do.
+    fn with_dev_header(state: AppState) -> AppState {
+        let inner = state.admin_auth.clone();
+        state.with_admin_auth(Arc::new(DevHeaderAuth::new(inner)))
+    }
+
+    /// A router with one Bo3 from source `alpha` (score 0:0, scheduled); with
+    /// `dev_header`, admin requests may use `X-Dev-User`.
+    async fn app(dev_header: bool) -> (Router, i64, store::SqlitePool, tempfile::TempDir) {
         let (pool, dir) = temp_db().await;
         let rec = reconciler(pool.clone(), &["alpha"]);
         let now = Utc.with_ymd_and_hms(2026, 11, 20, 9, 0, 0).unwrap();
@@ -520,14 +513,18 @@ mod tests {
             .unwrap()
             .unwrap();
         let clock = Arc::new(domain::FakeClock::new(now));
-        let state = AppState::new(rec, clock).with_admin_auth(auth);
+        let mut state = AppState::new(rec, clock);
+        if dev_header {
+            state = with_dev_header(state);
+        }
         let app = crate::router(state, std::path::Path::new("/nonexistent"));
         (app, id, pool, dir)
     }
 
     #[tokio::test]
-    async fn production_default_denies_every_admin_request() {
-        let (app, id, _pool, _dir) = app(Arc::new(DenyAll)).await;
+    async fn without_a_session_every_admin_request_is_401() {
+        // Production ignores X-Dev-User.
+        let (app, id, _pool, _dir) = app(false).await;
         let dev = [("x-dev-user", ADMIN)];
         for (method, path, body) in [
             ("PUT", "overrides/series", Some(json!({ "score": [2, 0] }))),
@@ -544,7 +541,7 @@ mod tests {
 
     #[tokio::test]
     async fn dev_header_auth_needs_a_user_id() {
-        let (app, id, _pool, _dir) = app(Arc::new(DevHeaderAuth)).await;
+        let (app, id, _pool, _dir) = app(true).await;
         let uri = format!("/api/admin/matches/{id}/void");
         for headers in [&[][..], &[("x-dev-user", "alice")][..]] {
             let (status, _) = send(&app, "POST", &uri, headers, None).await;
@@ -553,8 +550,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dev_header_auth_falls_back_to_the_session() {
+        use crate::test_util::{ALICE, GUILD, OWNER, auth_app};
+
+        let a = auth_app(Some(GUILD)).await;
+        let state = AppState::new(reconciler(a.pool.clone(), &[]), a.clock.clone())
+            .with_auth(a.auth.clone());
+        let app = crate::router(with_dev_header(state), std::path::Path::new("/nonexistent"));
+        for (user, expected) in [
+            (OWNER, (StatusCode::SERVICE_UNAVAILABLE, "sync_unavailable")),
+            (ALICE, (StatusCode::FORBIDDEN, "forbidden")),
+        ] {
+            let auth = format!("Bearer {}", a.sign_in(user, GUILD).await);
+            let (status, body) = send(
+                &app,
+                "GET",
+                "/api/admin/status",
+                &[("authorization", &auth)],
+                None,
+            )
+            .await;
+            assert_eq!(
+                (status, body["error"].as_str().unwrap()),
+                expected,
+                "{user}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn admin_overrides_void_and_errors() {
-        let (app, id, pool, _dir) = app(Arc::new(DevHeaderAuth)).await;
+        let (app, id, pool, _dir) = app(true).await;
         let h = [("x-dev-user", ADMIN)];
         let base = format!("/api/admin/matches/{id}");
 
@@ -676,13 +702,11 @@ mod tests {
         let base = crate::AppState::new(rec, clock);
         let dev = [("x-dev-user", ADMIN)];
         let no_sync = crate::router(
-            base.clone().with_admin_auth(Arc::new(DevHeaderAuth)),
+            with_dev_header(base.clone()),
             std::path::Path::new("/nonexistent"),
         );
         let app = crate::router(
-            base.clone()
-                .with_admin_auth(Arc::new(DevHeaderAuth))
-                .with_sync(handle),
+            with_dev_header(base.clone()).with_sync(handle),
             std::path::Path::new("/nonexistent"),
         );
         let denied = crate::router(base, std::path::Path::new("/nonexistent"));

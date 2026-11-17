@@ -1,5 +1,6 @@
-//! Dev-only fixture driver and endpoints (T05). Compiled only with the
-//! `dev` feature (and in this crate's tests), never into production builds.
+//! Dev-only endpoints: the fixture driver (T05) and dev sign-in (T07).
+//! Compiled only with the `dev` feature (and in this crate's tests), never
+//! into production builds.
 //!
 //! The [`FixtureDriver`] owns the fake clock and the fixture source. It keeps
 //! the scenario's anchor and the clock in `sync_state` (job `fixture`), so a
@@ -9,11 +10,14 @@
 //!
 //! - `GET /api/dev/clock` → `{now, anchor}`
 //! - `POST /api/dev/clock/advance` `{"minutes": n}` → `{now, anchor, report}`
+//! - `POST /api/dev/session` `{user_id, guild_id?, username?}` → a session
+//!   like `/api/auth/token` gives, without Discord ([`session_routes`]).
 
 use std::sync::Arc;
 
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use chrono::{DateTime, Duration, DurationRound, Utc};
@@ -27,7 +31,10 @@ use store::sync_state::{self, SyncState};
 use sync::{Reconciler, Report};
 use tokio::sync::Mutex;
 
-use crate::admin::ApiError;
+use crate::AppState;
+use crate::auth::{DiscordUser, is_snowflake, session_response};
+use crate::error::ApiError;
+use crate::me::me_body;
 
 /// The `sync_state` job that stores the anchor and the clock.
 pub const JOB: &str = "fixture";
@@ -240,6 +247,69 @@ async fn advance(
     }))
 }
 
+// ---- dev sign-in (T07) ----------------------------------------------------------
+
+/// The guild of dev sessions when neither the request nor
+/// `DISCORD_GUILD_ID` names one.
+pub const DEV_GUILD_ID: &str = "100000000000000000";
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DevSessionReq {
+    user_id: String,
+    #[serde(default)]
+    guild_id: Option<String>,
+    #[serde(default)]
+    username: Option<String>,
+}
+
+/// Route `/dev/session`, to be nested under `/api`: signs a user in without
+/// Discord, so the Activity can run in a normal browser against fixture
+/// data. Upserts the user (keeping a stored profile) and the membership.
+/// Admin routes still take `X-Dev-User`; admin status in `me` needs Discord.
+pub fn session_routes() -> Router<AppState> {
+    Router::new().route("/dev/session", post(dev_session))
+}
+
+async fn dev_session(
+    State(st): State<AppState>,
+    Json(r): Json<DevSessionReq>,
+) -> Result<Response, ApiError> {
+    if !is_snowflake(&r.user_id) {
+        return Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "invalid",
+            "user_id must be a Discord ID",
+        ));
+    }
+    let guild = r
+        .guild_id
+        .or_else(|| st.auth.config().guild_id.clone())
+        .unwrap_or_else(|| DEV_GUILD_ID.to_owned());
+    let guild = st.auth.check_guild_claim(Some(&guild))?;
+    let db = |e| ApiError::db("dev session", e);
+    let stored = store::users::get_user(&st.pool, &r.user_id)
+        .await
+        .map_err(db)?;
+    let nick = store::users::get_member(&st.pool, &guild, &r.user_id)
+        .await
+        .map_err(db)?
+        .and_then(|m| m.nick);
+    let suffix = &r.user_id[r.user_id.len().saturating_sub(4)..];
+    let user = DiscordUser {
+        id: r.user_id.clone(),
+        username: r
+            .username
+            .or_else(|| stored.as_ref().map(|u| u.username.clone()))
+            .unwrap_or_else(|| format!("dev-{suffix}")),
+        global_name: stored.as_ref().and_then(|u| u.global_name.clone()),
+        avatar: stored.as_ref().and_then(|u| u.avatar_hash.clone()),
+    };
+    let session = st.auth.start_session(&user, &guild, nick).await?;
+    let me = me_body(&st, &session.member).await?;
+    Ok(session_response(session, None, me))
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
@@ -247,7 +317,51 @@ mod tests {
     use sources::fixture::FIXTURE;
 
     use super::*;
-    use crate::test_util::{reconciler, send, temp_db};
+    use crate::test_util::{ALICE, GUILD, OTHER_GUILD, auth_app, reconciler, send, temp_db};
+
+    #[tokio::test]
+    async fn dev_sessions_skip_discord_but_not_the_guild_rule() {
+        let a = auth_app(Some(GUILD)).await;
+        let app = crate::router_with(
+            crate::AppState::new(reconciler(a.pool.clone(), &[]), a.clock.clone())
+                .with_auth(a.auth.clone()),
+            std::path::Path::new("/nonexistent"),
+            session_routes(),
+        );
+        let post =
+            |body: serde_json::Value| send(&app, "POST", "/api/dev/session", &[], Some(body));
+
+        let (status, body) = post(json!({ "user_id": ALICE })).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body.get("access_token"), None);
+        assert_eq!(body["me"]["guild_id"], GUILD, "DISCORD_GUILD_ID by default");
+        assert_eq!(body["me"]["username"], "dev-0004");
+        let token = body["session_token"].as_str().unwrap();
+        let (status, me) = a.get("/api/me", token).await;
+        assert_eq!(
+            (status, me["user_id"].as_str()),
+            (StatusCode::OK, Some(ALICE))
+        );
+        assert!(
+            !a.discord
+                .calls()
+                .iter()
+                .any(|c| *c == "exchange" || *c == "me"),
+            "no OAuth"
+        );
+
+        // A stored profile is kept.
+        let (_, body) = post(json!({ "user_id": ALICE })).await;
+        assert_eq!(body["me"]["username"], "dev-0004");
+
+        let (status, _) = post(json!({ "user_id": "alice" })).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        let (status, body) = post(json!({ "user_id": ALICE, "guild_id": OTHER_GUILD })).await;
+        assert_eq!(
+            (status, body["error"].as_str()),
+            (StatusCode::FORBIDDEN, Some("wrong_guild"))
+        );
+    }
 
     fn start() -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 11, 20, 12, 0, 42).unwrap()

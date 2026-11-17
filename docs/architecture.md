@@ -48,7 +48,7 @@ flowchart LR
 
 | Component | Crate | Responsibility | Tickets |
 | --- | --- | --- | --- |
-| Domain | `domain` | Types, pick validation, scoring, achievements. Pure functions, no I/O. | T10, T11, P6 |
+| Domain | `domain` | Types, pick validation, scoring, achievements, the admin rule. Pure functions, no I/O. | T07, T10, T11, P6 |
 | Store | `store` | sqlx repositories and migrations. | T02 |
 | Sources | `sources` | `SourceAdapter` trait and adapters (PandaScore, manual, fixture). Fetch and convert only, never write the DB. | T03–T05 |
 | Sync | `sync` | Scheduler with API budget, reconciler, lock ticker, domain events. | T03, T06 |
@@ -78,7 +78,7 @@ flowchart LR
 
 ## Data model
 
-The canonical schema is specified in [T02](tickets/T02-domain-model-database.md). Main tables: `teams`, `events`, `stages`, `matches`, `maps`, `external_refs`, `source_records`, `users`, `guild_members`, `picks`, `pick_maps`, `pick_revisions`, `pick_results`, `guild_settings`, `followed_events`, `audit_log`, `sync_state`. T03 adds `field_sources` (which source set each value) and `unlinked_refs` (the unlinked queue); see [ADR 0004](adr/0004-source-adapters-reconciliation.md).
+The canonical schema is specified in [T02](tickets/T02-domain-model-database.md). Main tables: `teams`, `events`, `stages`, `matches`, `maps`, `external_refs`, `source_records`, `users`, `guild_members`, `picks`, `pick_maps`, `pick_revisions`, `pick_results`, `guild_settings`, `followed_events`, `audit_log`, `sync_state`. T03 adds `field_sources` (which source set each value) and `unlinked_refs` (the unlinked queue); see [ADR 0004](adr/0004-source-adapters-reconciliation.md). T07 adds `sessions` (hashed bearer tokens); see [ADR 0007](adr/0007-discord-auth-sessions.md).
 
 ## Deployment
 
@@ -95,6 +95,7 @@ The canonical schema is specified in [T02](tickets/T02-domain-model-database.md)
 | --- | --- | --- |
 | PandaScore's free plan lacks per-map round scores or live data | Exact map-score picks can't be settled automatically | **Confirmed by the T04 spike ([ADR 0001](adr/0001-pandascore-coverage.md)): no round scores or map names on the free plan.** Manual entry (T05); pending-then-void rule (T11); a second adapter later. Liquipedia's API asks for a named User-Agent and has usage terms. HLTV has no official API; scraping it is fragile and likely against its terms. |
 | Discord Activity APIs change (Entry Point command, launch response, launch parameters) | Launch buttons or deep links break | T08 checks current docs; the pending-view deep link needs no special API. |
+| Discord limits unverified Activities to the app's team and app testers, in servers under 25 members | Most members of a larger server can't open the Activity | Checked in T07 ([discord-setup.md](discord-setup.md#who-can-launch-it)); open question in [vision.md](vision.md#open-questions): app verification, or app testers for small groups. |
 | Public URL for the Pi | The Activity can't load without HTTPS | Own domain, ports 80/443 forwarded, Caddy with automatic certificates; only Caddy is exposed and the host is hardened (T16). DS-Lite or CGNAT connections can't forward IPv4 ports. Use DynDNS if the IP changes. |
 | Unattended updates by Watchtower | A bad release goes live by itself | CI gates, backward-compatible migrations, `IMAGE_TAG` pinning for rollback, backups (P4). |
 | SD-card wear and corruption | Data loss | SSD recommended (T16), backups (P4). |

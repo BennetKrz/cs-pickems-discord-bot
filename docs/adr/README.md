@@ -15,3 +15,4 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | [0004](0004-source-adapters-reconciliation.md) | Source adapters and reconciliation | accepted |
 | [0005](0005-manual-overrides-and-fixtures.md) | Manual overrides, admin match actions and dev fixtures | accepted |
 | [0006](0006-sync-scheduler-budget.md) | Sync scheduler and request budget | accepted |
+| [0007](0007-discord-auth-sessions.md) | Discord sign-in, sessions, admin check and image proxy | accepted |

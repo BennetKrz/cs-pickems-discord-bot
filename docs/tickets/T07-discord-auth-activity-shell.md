@@ -1,7 +1,7 @@
 # T07 – Discord application, authentication and Activity shell
 
 - **Epic:** B – Discord integration
-- **Status:** todo
+- **Status:** in review
 - **Index:** [all tickets](README.md)
 
 **Goal:** a member opens the Activity in the server and is signed in with their Discord account automatically.
@@ -23,6 +23,32 @@
 **Acceptance criteria**
 
 - [ ] The Activity opens in the test server on desktop and mobile and shows the user's name and avatar.
-- [ ] A forged guild ID, a non-member, and an expired session all get 401/403; tests cover each.
-- [ ] Admin detection is correct for the owner, a *Manage Server* role, the configured role, and a normal member.
+- [x] A forged guild ID, a non-member, and an expired session all get 401/403; tests cover each.
+- [x] Admin detection is correct for the owner, a *Manage Server* role, the configured role, and a normal member.
 - [ ] No CSP errors in the Activity console.
+
+**Notes**
+
+- Decisions are in [ADR 0007](../adr/0007-discord-auth-sessions.md):
+  - sessions are stored as SHA-256 hashes (migration `0004_sessions.sql`), with a fixed 7 days on the real clock;
+  - scope `identify` only, with membership checked by the bot token;
+  - the client ID comes from `GET /api/auth/config` instead of a build-time variable;
+  - the admin rule is in `domain::admin`, with Discord data cached for 5 min, the configured role read fresh, and a 30 s backoff after Discord failures;
+  - the image proxy is keyed by internal IDs (`/api/img/avatar/{user_id}`, `/api/img/team/{team_id}`) instead of taking URLs, so source URLs with external IDs never reach the client; raster images only;
+  - an ETag middleware covers every JSON `GET` under `/api`;
+  - dev builds get a dev sign-in (`POST /api/dev/session`), which `pnpm dev` uses outside Discord (owner's choice).
+- Setup guide: [docs/discord-setup.md](../discord-setup.md). New setting: `IMAGE_CACHE_DIR` (default `data/img-cache`).
+- Tests:
+  - `backend/crates/api/src/auth/tests.rs`: forged, missing and foreign guild; non-member; bad code; Discord outage; expiry at 7 days; malformed tokens; pinning the guild; the admin rule over HTTP for owner, *Manage Server*, the configured role and a member; cache and backoff.
+  - `auth/discord.rs`: the real client against a local mock (form body, bot token, User-Agent, 404/403).
+  - `img/tests.rs`: allow-list, disk cache, stale copies, non-images, redirect and size limits.
+  - `etag.rs`, `domain::admin`, `store` session repository and constraints.
+  - Frontend: `discord.test.ts` (SDK call order and arguments), `auth.test.tsx` (outside a server, errors, re-sign-in on 401), `poll.test.tsx` (ETag, 20/60 s, pause while hidden), `shell/Shell.test.tsx`.
+- Checked locally with a dev build and `pnpm dev` in headless Chrome at 360 px and 1100 px: sign-in, tabs, the avatar through the proxy, 304s, and "Open this from the server" for the production build outside Discord.
+- Still open: the first and the last criterion need a run inside Discord (desktop and mobile, console without CSP errors). That needs a real Discord application, which this environment does not have.
+- Follow-ups:
+  - T08: `/admin role set` writes `guild_settings.admin_role_id`; bot admin checks can reuse `domain::admin` with interaction data. The deep link (pending view) goes into the shell's memory router.
+  - T12–T15: replace the placeholder tabs in `frontend/src/routes/tabs.tsx`; use `usePoll` with `POLL_LIVE_MS` or `POLL_IDLE_MS`, and `api::img::team_logo_url` for logos.
+  - T16: rate-limit `/api/auth/*`; set `IMAGE_CACHE_DIR=/data/img-cache` in the image.
+  - Discord shows an unverified Activity only to the app's team and up to 50 app testers, in servers under 25 members. This is an open question in [vision.md](../vision.md#open-questions).
+  - The member's server avatar is not stored; the user avatar is shown.

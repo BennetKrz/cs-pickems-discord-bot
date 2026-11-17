@@ -59,6 +59,46 @@ pub fn scheduled_sources(config: &Config) -> anyhow::Result<Vec<sync::SourceEntr
     Ok(out)
 }
 
+/// Sign-in, sessions and the admin check (T07) on Discord's API. Sessions
+/// run on the real clock, also when fixtures run on the dev clock.
+pub fn auth_service(
+    config: &Config,
+    pool: store::SqlitePool,
+) -> anyhow::Result<api::auth::AuthService> {
+    let d = &config.discord;
+    let client = api::auth::DiscordClient::new(api::auth::DiscordClientConfig::new(
+        &d.client_id,
+        d.client_secret.expose(),
+        d.bot_token.expose(),
+    ))
+    .map_err(anyhow::Error::msg)
+    .context("building the Discord client")?;
+    Ok(api::auth::AuthService::new(
+        pool,
+        Arc::new(client),
+        api::auth::AuthConfig::new(d.client_id.clone(), d.guild_id.clone()),
+        Arc::new(domain::SystemClock),
+    ))
+}
+
+/// The image proxy (T07) with its disk cache. An unusable cache directory
+/// is only a warning: images then fail, the rest of the app works.
+pub fn image_proxy(config: &Config) -> anyhow::Result<api::img::ImageProxy> {
+    if let Err(e) = std::fs::create_dir_all(&config.image_cache_dir) {
+        tracing::warn!(
+            dir = %config.image_cache_dir.display(),
+            "cannot create the image cache directory (IMAGE_CACHE_DIR): {e}"
+        );
+    }
+    let fetcher = api::img::HttpFetcher::new()
+        .map_err(anyhow::Error::msg)
+        .context("building the image fetcher")?;
+    Ok(api::img::ImageProxy::new(
+        config.image_cache_dir.clone(),
+        Arc::new(fetcher),
+    ))
+}
+
 fn budget_of(config: &Config, id: SourceId) -> Option<sync::BudgetLimits> {
     config.budgets.get(&id).map(|b| sync::BudgetLimits {
         per_hour: b.per_hour,
@@ -122,14 +162,23 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     // Domain events from the reconciler; T08, T10 and T11 subscribe here.
     let bus = sync::EventBus::new();
     let reconciler = Arc::new(reconciler(&config, pool.clone(), bus.clone()));
+    let auth = Arc::new(auth_service(&config, pool.clone())?);
     #[cfg_attr(not(feature = "dev"), allow(unused_mut))]
-    let mut state = api::AppState::new(reconciler.clone(), Arc::new(domain::SystemClock));
-    #[cfg_attr(not(feature = "dev"), allow(unused_mut))]
-    let mut extra_api = axum::Router::new();
+    let mut state = api::AppState::new(reconciler.clone(), Arc::new(domain::SystemClock))
+        .with_auth(auth)
+        .with_images(Arc::new(image_proxy(&config)?));
+    #[cfg(not(feature = "dev"))]
+    let extra_api = axum::Router::new();
+    #[cfg(feature = "dev")]
+    let mut extra_api = api::dev::session_routes();
     #[cfg(feature = "dev")]
     {
-        tracing::warn!("dev build: admin requests are trusted from the X-Dev-User header");
-        state = state.with_admin_auth(Arc::new(api::admin::DevHeaderAuth));
+        tracing::warn!(
+            "dev build: admin requests are trusted from the X-Dev-User header, \
+             and POST /api/dev/session signs anyone in without Discord"
+        );
+        let sessions = state.admin_auth.clone();
+        state = state.with_admin_auth(Arc::new(api::admin::DevHeaderAuth::new(sessions)));
         if fixture {
             let driver = Arc::new(
                 api::dev::FixtureDriver::open(
@@ -153,7 +202,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                 "fixture scenario loaded; advance with POST /api/dev/clock/advance"
             );
             state.clock = driver.clock();
-            extra_api = api::dev::routes(driver);
+            extra_api = extra_api.merge(api::dev::routes(driver));
         }
     }
 
