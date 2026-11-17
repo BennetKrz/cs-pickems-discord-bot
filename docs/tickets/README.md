@@ -34,7 +34,7 @@ Tickets on the same line can run in parallel.
 | [T03](T03-source-adapters-reconciliation.md) | Data-source adapter framework and reconciliation | A | T02 | done |
 | [T04](T04-pandascore-adapter.md) | PandaScore adapter | A | T03 | in review |
 | [T05](T05-manual-source-fixtures.md) | Manual source, admin overrides and dev fixtures | A | T03 | done |
-| [T06](T06-sync-scheduler-budget.md) | Sync scheduler and API request budget | A | T03, T04 | todo |
+| [T06](T06-sync-scheduler-budget.md) | Sync scheduler and API request budget | A | T03, T04 | done |
 | [T07](T07-discord-auth-activity-shell.md) | Discord application, authentication and Activity shell | B | T01, T02 | todo |
 | [T08](T08-bot-commands-announcements.md) | Bot commands, channel announcements and Activity launch | B | T07, T03 (domain events) | todo |
 | [T09](T09-followed-events.md) | Followed events | B | T06, T08 | todo |

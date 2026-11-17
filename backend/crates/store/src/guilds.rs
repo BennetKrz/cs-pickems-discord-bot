@@ -136,6 +136,15 @@ pub async fn list_followed(
     .await
 }
 
+/// Every event any guild follows, by ID. The sync scheduler (T06) keeps
+/// exactly these fresh.
+pub async fn followed_event_ids(ex: impl SqliteExecutor<'_>) -> DbResult<Vec<EventId>> {
+    sqlx::query_scalar("SELECT DISTINCT event_id FROM followed_events ORDER BY event_id")
+        .fetch_all(ex)
+        .await
+        .map(|ids: Vec<i64>| ids.into_iter().map(EventId).collect())
+}
+
 pub async fn is_followed(
     ex: impl SqliteExecutor<'_>,
     guild_id: &str,

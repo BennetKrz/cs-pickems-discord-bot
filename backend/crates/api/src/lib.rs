@@ -2,7 +2,8 @@
 //!
 //! Routes:
 //! - `GET /healthz` – liveness and DB check, no auth.
-//! - `/api/admin/*` – admin actions on match data (T05, [`admin`]).
+//! - `/api/admin/*` – admin actions on match data (T05) and the sync
+//!   status and resync (T06), see [`admin`].
 //! - `/api/dev/*` – dev builds only (feature `dev`): the fixture clock (T05).
 //! - `/api/*` – the JSON API (T07 onwards); unknown paths answer a JSON 404.
 //! - everything else – the built frontend (`frontend/dist`). The Activity
@@ -25,7 +26,7 @@ use axum::{Json, Router};
 use domain::Clock;
 use serde::Serialize;
 use store::SqlitePool;
-use sync::{ManualService, Reconciler};
+use sync::{ManualService, Reconciler, SyncHandle};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
@@ -49,6 +50,9 @@ pub struct AppState {
     pub clock: Arc<dyn Clock>,
     pub manual: ManualService,
     pub admin_auth: Arc<dyn AdminAuth>,
+    /// The running sync scheduler (T06); `None` when it is not running,
+    /// e.g. in tests.
+    pub sync: Option<SyncHandle>,
 }
 
 impl AppState {
@@ -60,7 +64,13 @@ impl AppState {
             clock,
             manual: ManualService::new(reconciler),
             admin_auth: Arc::new(DenyAll),
+            sync: None,
         }
+    }
+
+    pub fn with_sync(mut self, handle: SyncHandle) -> Self {
+        self.sync = Some(handle);
+        self
     }
 
     pub fn with_admin_auth(mut self, auth: Arc<dyn AdminAuth>) -> Self {

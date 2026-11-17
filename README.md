@@ -55,9 +55,35 @@ The placeholder Discord values are fine for now, because the bot does not connec
 | `BIND_ADDR` | no | `0.0.0.0:8080` | |
 | `STATIC_DIR` | no | `../frontend/dist` | built frontend |
 | `BUDGET__<SOURCE>__PER_HOUR` / `__PER_MINUTE` | no | PandaScore 500 / 30 | request budget for the sync worker (T06) |
+| `SYNC__<KEY>` | no | see below | sync cadences such as `SYNC__LIVE_EVERY=2m` (T06) |
 | `CONFIG_FILE` | no | `./config.toml` if present | optional TOML file |
 
 Non-secret settings can also go in a TOML file; see [config.example.toml](config.example.toml). The precedence is environment, then file, then default. Secrets in the file are rejected at startup. When something is missing or invalid, the app exits with code 1 and lists every problem, naming the variable to set.
+
+### Sync and API budget
+
+Only the sync worker calls external APIs, and only for events an admin follows. Each job is one batched call for all its matches:
+
+| Data | Default cadence | Setting |
+| --- | --- | --- |
+| Followed event structure (stages, bracket, match list) | every 6 h, and right after following or a resync | `structure_every` |
+| Matches starting in the next 48 h | every 30 min | `upcoming_window`, `upcoming_every` |
+| Matches starting within 1 h (or up to 6 h overdue) | every 5 min | `imminent_window`, `imminent_every`, `overdue_window` |
+| Live matches | every 2 min | `live_every` |
+| Finished matches | at +10 min and +2 h, then never | `corrections_after` |
+| Event search | on demand, cached 24 h | `search_cache` |
+| Lock ticker (no API calls) | every 30 s | `lock_every` |
+
+Set them in `[sync]` in the config file or as `SYNC__<KEY>`, with durations like `30s`, `5m`, `6h`, `2d`. The budget per source (default 500/h and 30/min for PandaScore, half the free plan) is a pair of token buckets. When it runs short, live polling goes first and the lower priorities wait. Counters and job states are at `GET /api/admin/status`, and `POST /api/admin/events/{id}/resync` forces a structure sync. Details are in [ADR 0006](docs/adr/0006-sync-scheduler-budget.md).
+
+Expected PandaScore requests, measured by the simulation in `backend/crates/sync/tests/scheduler.rs`:
+
+| Day | Followed events | Matches | Most live at once | Requests in 24 h | Peak hour | Peak minute |
+| --- | --- | --- | --- | --- | --- | --- |
+| Typical | 1 | 6 | 2 | ~305 | 37 | 4 |
+| Busy | 3 | 20 | 4 | ~816 | 60 | 13 |
+
+Both stay far below the budget of 500 per hour.
 
 ### Run
 

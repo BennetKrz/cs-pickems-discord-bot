@@ -27,6 +27,7 @@ clap.workspace = true
 domain.workspace = true
 dotenvy.workspace = true
 serde.workspace = true
+sources = { workspace = true, features = ["pandascore"] }
 store.workspace = true
 sync.workspace = true
 tokio.workspace = true

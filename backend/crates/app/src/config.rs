@@ -115,6 +115,8 @@ pub struct Config {
     pub primary_source: Option<SourceId>,
     /// Field precedence per field group, from `[precedence]` (T03).
     pub precedence: sync::Precedence,
+    /// Cadences of the sync scheduler, from `[sync]` and `SYNC__*` (T06).
+    pub sync: sync::SyncConfig,
 }
 
 /// Everything wrong with the configuration, reported at once.
@@ -182,6 +184,9 @@ struct FileConfig {
     /// Field group → sources, highest precedence first.
     #[serde(default)]
     precedence: BTreeMap<String, Vec<String>>,
+    /// Sync cadences (T06), durations such as `30s`, `5m`, `6h`, `2d`.
+    #[serde(default)]
+    sync: BTreeMap<String, StringOrList>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -367,6 +372,7 @@ pub fn from_sources(
         &mut err,
     );
     let precedence = precedence(file.precedence, &enabled_sources, &mut err);
+    let sync = sync_config(env, file.sync, &mut err);
 
     if !err.is_empty() {
         return Err(err);
@@ -396,6 +402,7 @@ pub fn from_sources(
         budgets,
         primary_source,
         precedence,
+        sync,
     })
 }
 
@@ -589,6 +596,113 @@ fn budgets(
         }
     }
     budgets
+}
+
+/// The `[sync]` keys (lowercase) and `SYNC__<KEY>` variables (uppercase).
+const SYNC_KEYS: [&str; 10] = [
+    "structure_every",
+    "upcoming_window",
+    "upcoming_every",
+    "imminent_window",
+    "imminent_every",
+    "overdue_window",
+    "live_every",
+    "corrections_after",
+    "search_cache",
+    "lock_every",
+];
+
+/// Parses a duration such as `30s`, `5m`, `6h` or `2d`.
+pub fn parse_duration(s: &str) -> Option<chrono::Duration> {
+    let s = s.trim();
+    let split = s.find(|c: char| !c.is_ascii_digit())?;
+    let (n, unit) = s.split_at(split);
+    let n: i64 = n.parse().ok()?;
+    match unit.trim() {
+        "s" => chrono::Duration::try_seconds(n),
+        "m" => chrono::Duration::try_minutes(n),
+        "h" => chrono::Duration::try_hours(n),
+        "d" => chrono::Duration::try_days(n),
+        _ => None,
+    }
+}
+
+/// Merges the sync cadences: defaults, then `[sync]` in the file, then
+/// `SYNC__<KEY>` from env. `corrections_after` is a list (comma-separated
+/// in env).
+fn sync_config(
+    env: &HashMap<String, String>,
+    file: BTreeMap<String, StringOrList>,
+    err: &mut ConfigError,
+) -> sync::SyncConfig {
+    let mut values: BTreeMap<String, (String, String)> = BTreeMap::new();
+    for (key, v) in file {
+        values.insert(
+            key.to_ascii_lowercase(),
+            (format!("config file: [sync] {key}"), v.into_string()),
+        );
+    }
+    let mut env_keys: Vec<&String> = env.keys().filter(|k| k.starts_with("SYNC__")).collect();
+    env_keys.sort();
+    for key in env_keys {
+        let value = env[key].trim();
+        if !value.is_empty() {
+            values.insert(
+                key["SYNC__".len()..].to_ascii_lowercase(),
+                (key.clone(), value.to_owned()),
+            );
+        }
+    }
+
+    let mut c = sync::SyncConfig::default();
+    for (key, (origin, raw)) in values {
+        let parse_one = |raw: &str, err: &mut ConfigError| {
+            let d = parse_duration(raw);
+            if d.is_none() {
+                err.invalid.push(format!(
+                    "{origin}: expected a duration such as 30s, 5m, 6h or 2d, got `{raw}`"
+                ));
+            }
+            d
+        };
+        let slot = match key.as_str() {
+            "structure_every" => &mut c.structure_every,
+            "upcoming_window" => &mut c.upcoming_window,
+            "upcoming_every" => &mut c.upcoming_every,
+            "imminent_window" => &mut c.imminent_window,
+            "imminent_every" => &mut c.imminent_every,
+            "overdue_window" => &mut c.overdue_window,
+            "live_every" => &mut c.live_every,
+            "search_cache" => &mut c.search_cache,
+            "lock_every" => &mut c.lock_every,
+            "corrections_after" => {
+                let parsed: Vec<_> = raw
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(|s| parse_one(s, err))
+                    .collect();
+                if let Some(list) = parsed.into_iter().collect::<Option<Vec<_>>>() {
+                    c.corrections_after = list;
+                }
+                continue;
+            }
+            _ => {
+                err.invalid.push(format!(
+                    "{origin}: unknown sync setting (known: {})",
+                    SYNC_KEYS.join(", ")
+                ));
+                continue;
+            }
+        };
+        if let Some(d) = parse_one(&raw, err) {
+            *slot = d;
+        }
+    }
+    for problem in c.validate() {
+        err.invalid.push(format!("sync settings: {problem}"));
+    }
+    c
 }
 
 fn check_snowflake(key: &str, value: &str, err: &mut ConfigError) {
@@ -878,5 +992,91 @@ mod tests {
         let mut e = full_env();
         e.insert("ENABLED_SOURCES".into(), "manual".into());
         assert_eq!(from_sources(&e, None).unwrap().primary_source, None);
+    }
+
+    #[test]
+    fn durations_parse_with_units() {
+        use chrono::Duration;
+        assert_eq!(parse_duration("30s"), Some(Duration::seconds(30)));
+        assert_eq!(parse_duration(" 5m "), Some(Duration::minutes(5)));
+        assert_eq!(parse_duration("6h"), Some(Duration::hours(6)));
+        assert_eq!(parse_duration("2d"), Some(Duration::days(2)));
+        for bad in ["", "5", "m", "5x", "-5m", "1.5h"] {
+            assert_eq!(parse_duration(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn sync_cadences_default_then_file_then_env() {
+        use chrono::Duration;
+        let c = from_sources(&full_env(), None).unwrap();
+        assert_eq!(c.sync, sync::SyncConfig::default());
+
+        let file = "[sync]\n\
+                    live_every = \"3m\"\n\
+                    structure_every = \"12h\"\n\
+                    corrections_after = [\"15m\", \"1h\", \"6h\"]\n";
+        let mut e = full_env();
+        e.insert("SYNC__LIVE_EVERY".into(), "1m".into());
+        e.insert("SYNC__SEARCH_CACHE".into(), "2d".into());
+        let c = from_sources(&e, with_file(file)).unwrap();
+        assert_eq!(c.sync.live_every, Duration::minutes(1), "env wins");
+        assert_eq!(c.sync.structure_every, Duration::hours(12));
+        assert_eq!(c.sync.search_cache, Duration::days(2));
+        assert_eq!(
+            c.sync.corrections_after,
+            [
+                Duration::minutes(15),
+                Duration::hours(1),
+                Duration::hours(6)
+            ]
+        );
+
+        e.insert("SYNC__CORRECTIONS_AFTER".into(), "5m, 30m".into());
+        let c = from_sources(&e, None).unwrap();
+        assert_eq!(
+            c.sync.corrections_after,
+            [Duration::minutes(5), Duration::minutes(30)]
+        );
+    }
+
+    #[test]
+    fn bad_sync_settings_are_reported() {
+        let mut e = full_env();
+        e.insert("SYNC__LIVE_EVERY".into(), "fast".into());
+        e.insert("SYNC__NAP_TIME".into(), "5m".into());
+        e.insert("SYNC__IMMINENT_WINDOW".into(), "3d".into());
+        let err = from_sources(&e, with_file("[sync]\nlock_every = \"0s\"\n")).unwrap_err();
+        let text = err.to_string();
+        assert!(
+            text.contains("SYNC__LIVE_EVERY: expected a duration"),
+            "{text}"
+        );
+        assert!(
+            text.contains("SYNC__NAP_TIME: unknown sync setting"),
+            "{text}"
+        );
+        assert!(text.contains("imminent_window must be shorter"), "{text}");
+        assert!(
+            text.contains("lock_every must be greater than zero"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn example_sync_block_matches_the_defaults() {
+        // The commented `[sync]` block in config.example.toml, uncommented.
+        let text = include_str!("../../../../config.example.toml");
+        let block: String = text
+            .lines()
+            .skip_while(|l| *l != "# [sync]")
+            .take_while(|l| l.starts_with('#'))
+            .map(|l| l.trim_start_matches("# "))
+            .map(|l| l.split("  #").next().unwrap_or(l))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(block.starts_with("[sync]"), "{block}");
+        let c = from_sources(&full_env(), with_file(&block)).unwrap();
+        assert_eq!(c.sync, sync::SyncConfig::default());
     }
 }

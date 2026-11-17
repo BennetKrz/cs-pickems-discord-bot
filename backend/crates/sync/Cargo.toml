@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 chrono.workspace = true
+fastrand.workspace = true
 domain.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -22,6 +23,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 sources = { workspace = true, features = ["fake", "fixture"] }
 tempfile.workspace = true
 

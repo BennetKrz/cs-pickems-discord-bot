@@ -1,4 +1,5 @@
-//! Admin API for match data (T05): manual overrides, void and reopen.
+//! Admin API: manual overrides, void and reopen of matches (T05), and the
+//! sync status and a manual resync of an event (T06).
 //!
 //! Every route needs an [`AdminUser`], resolved by the [`AdminAuth`] in the
 //! app state. Until T07 brings Discord sessions, production uses
@@ -11,12 +12,13 @@ use axum::extract::{FromRequestParts, Path, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{post, put};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
-use domain::{MapStatus, Match, MatchFormat, MatchId, MatchMap, MatchStatus};
+use domain::{EventId, MapStatus, Match, MatchFormat, MatchId, MatchMap, MatchStatus};
 use serde::{Deserialize, Serialize};
-use sync::{ManualError, Outcome, Override, OverrideField};
+use store::audit::{self, AuditRecord};
+use sync::{ManualError, Outcome, Override, OverrideField, SyncHandle, SyncStatus};
 
 use crate::AppState;
 
@@ -273,6 +275,8 @@ pub fn routes() -> Router<AppState> {
         .route("/matches/{id}/void", post(void))
         .route("/matches/{id}/unvoid", post(unvoid))
         .route("/matches/{id}/reopen", post(reopen))
+        .route("/status", get(sync_status))
+        .route("/events/{id}/resync", post(resync))
 }
 
 async fn set(st: &AppState, id: i64, ov: Override, admin: &AdminUser) -> ApiResult {
@@ -394,6 +398,86 @@ async fn reopen(State(st): State<AppState>, admin: AdminUser, Path(id): Path<i64
             .reopen(MatchId(id), &admin.0, st.clock.now())
             .await?,
     )
+}
+
+// ---- sync (T06) ---------------------------------------------------------------
+
+fn sync_handle(st: &AppState) -> Result<&SyncHandle, ApiError> {
+    st.sync.as_ref().ok_or_else(|| {
+        ApiError::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "sync_unavailable",
+            "the sync worker is not running",
+        )
+    })
+}
+
+fn internal(e: sqlx::Error) -> ApiError {
+    tracing::error!("admin request failed: {e}");
+    ApiError::new(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "internal",
+        "database error",
+    )
+}
+
+/// `GET /api/admin/status`: request counters and budget per source, and the
+/// state of every sync job.
+async fn sync_status(
+    State(st): State<AppState>,
+    _admin: AdminUser,
+) -> Result<Json<SyncStatus>, ApiError> {
+    let handle = sync_handle(&st)?;
+    Ok(Json(handle.status().await.map_err(internal)?))
+}
+
+#[derive(Debug, Serialize)]
+struct ResyncBody {
+    event_id: i64,
+    queued: bool,
+}
+
+/// `POST /api/admin/events/{id}/resync`: runs the event's structure sync at
+/// once, also for an event nobody follows or that has finished.
+async fn resync(
+    State(st): State<AppState>,
+    admin: AdminUser,
+    Path(id): Path<i64>,
+) -> Result<(StatusCode, Json<ResyncBody>), ApiError> {
+    let handle = sync_handle(&st)?;
+    let exists = store::events::get(&st.pool, EventId(id))
+        .await
+        .map_err(internal)?
+        .is_some();
+    if !exists {
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            format!("event {id} not found"),
+        ));
+    }
+    audit::append(
+        &st.pool,
+        &AuditRecord {
+            actor: admin.0,
+            action: "resync".to_owned(),
+            entity_type: "event".to_owned(),
+            entity_id: Some(id.to_string()),
+            before: None,
+            after: None,
+            at: st.clock.now(),
+        },
+    )
+    .await
+    .map_err(internal)?;
+    handle.sync_event_now(EventId(id));
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(ResyncBody {
+            event_id: id,
+            queued: true,
+        }),
+    ))
 }
 
 #[cfg(test)]
@@ -557,5 +641,83 @@ mod tests {
             .unwrap();
         assert_eq!(audit.len(), 5);
         assert!(audit.iter().all(|a| a.record.actor == ADMIN));
+    }
+
+    #[tokio::test]
+    async fn sync_status_and_resync() {
+        use sources::fake::FakeAdapter;
+        use sync::{BudgetLimits, Scheduler, SchedulerParts, SourceEntry, SyncConfig};
+
+        let (pool, _dir) = temp_db().await;
+        let rec = reconciler(pool.clone(), &["alpha"]);
+        let now = Utc.with_ymd_and_hms(2026, 11, 20, 9, 0, 0).unwrap();
+        let clock = Arc::new(domain::FakeClock::new(now));
+        let src = Arc::new(FakeAdapter::new("alpha"));
+        src.put_event(SrcEvent::new("e1", "IEM Test"));
+        rec.ingest_event("alpha", &sourced(&SrcEvent::new("e1", "IEM Test")), now)
+            .await
+            .unwrap();
+        let (mut scheduler, handle) = Scheduler::open(SchedulerParts {
+            reconciler: rec.clone(),
+            clock: clock.clone(),
+            config: SyncConfig::default(),
+            sources: vec![SourceEntry {
+                adapter: src.clone(),
+                budget: Some(BudgetLimits {
+                    per_hour: 500,
+                    per_minute: 30,
+                }),
+            }],
+            seed: Some(1),
+        })
+        .await
+        .unwrap();
+
+        let base = crate::AppState::new(rec, clock);
+        let dev = [("x-dev-user", ADMIN)];
+        let no_sync = crate::router(
+            base.clone().with_admin_auth(Arc::new(DevHeaderAuth)),
+            std::path::Path::new("/nonexistent"),
+        );
+        let app = crate::router(
+            base.clone()
+                .with_admin_auth(Arc::new(DevHeaderAuth))
+                .with_sync(handle),
+            std::path::Path::new("/nonexistent"),
+        );
+        let denied = crate::router(base, std::path::Path::new("/nonexistent"));
+
+        let (status, _) = send(&denied, "GET", "/api/admin/status", &dev, None).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let (status, body) = send(&no_sync, "GET", "/api/admin/status", &dev, None).await;
+        assert_eq!(
+            (status, body["error"].as_str()),
+            (StatusCode::SERVICE_UNAVAILABLE, Some("sync_unavailable"))
+        );
+
+        let (status, body) = send(&app, "GET", "/api/admin/status", &dev, None).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["sources"][0]["source"], "alpha");
+        assert_eq!(body["sources"][0]["budget_per_hour"], 500);
+        assert_eq!(body["sources"][0]["requests_this_hour"], 0);
+        assert_eq!(body["jobs"], json!([]));
+
+        let (status, _) = send(&app, "POST", "/api/admin/events/999/resync", &dev, None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let (status, body) = send(&app, "POST", "/api/admin/events/1/resync", &dev, None).await;
+        assert_eq!(status, StatusCode::ACCEPTED, "{body}");
+        let audit = store::audit::list_for_entity(&pool, "event", "1")
+            .await
+            .unwrap();
+        assert_eq!(audit.len(), 1);
+        assert_eq!(audit[0].record.actor, ADMIN);
+
+        // The unfollowed event is synced on the next tick.
+        scheduler.tick().await.unwrap();
+        assert_eq!(src.calls(), 2, "fetch_event and fetch_event_matches");
+        let (_, body) = send(&app, "GET", "/api/admin/status", &dev, None).await;
+        assert_eq!(body["sources"][0]["requests_this_hour"], 2);
+        assert_eq!(body["jobs"][0]["job"], "structure:1");
+        assert!(body["jobs"][0]["last_success_at"].is_string(), "{body}");
     }
 }
