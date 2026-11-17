@@ -7,6 +7,12 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# Dev builds: the `fixture` source, the fake clock endpoints `/api/dev/*`
+# and `X-Dev-User` admin auth (T05). `cargo run --features dev`. Production
+# images (T16) are built without it.
+dev = ["api/dev"]
+
 [[bin]]
 name = "app"
 path = "src/main.rs"
@@ -14,9 +20,11 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 api.workspace = true
+axum.workspace = true
 bot.workspace = true
 chrono.workspace = true
 clap.workspace = true
+domain.workspace = true
 dotenvy.workspace = true
 serde.workspace = true
 store.workspace = true

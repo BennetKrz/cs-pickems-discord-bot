@@ -86,12 +86,19 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "api"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "axum",
+ "chrono",
+ "domain",
  "http-body-util",
  "serde",
  "serde_json",
+ "sources",
+ "sqlx",
  "store",
+ "sync",
  "tempfile",
+ "thiserror",
  "tokio",
  "tokio-util",
  "tower",
@@ -105,9 +112,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "api",
+ "axum",
  "bot",
  "chrono",
  "clap",
+ "domain",
  "dotenvy",
  "serde",
  "store",

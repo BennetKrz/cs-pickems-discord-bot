@@ -116,6 +116,10 @@ impl Reconciler {
         &self.bus
     }
 
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     fn is_primary(&self, source: &str) -> bool {
         self.primary.as_deref() == Some(source)
     }
@@ -1198,7 +1202,7 @@ impl Reconciler {
         Ok(id)
     }
 
-    async fn refresh_match_in(
+    pub(crate) async fn refresh_match_in(
         &self,
         c: &mut Conn,
         id: MatchId,

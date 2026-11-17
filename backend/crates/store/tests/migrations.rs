@@ -76,7 +76,7 @@ async fn migrations_are_idempotent_on_restart() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(applied, 2, "0001 and 0002");
+    assert_eq!(applied, 3, "0001 to 0003");
     let kept = store::teams::get(&pool, id).await.unwrap().unwrap();
     assert_eq!(kept.name, "Alpha");
     pool.close().await;

@@ -8,11 +8,23 @@ license.workspace = true
 publish.workspace = true
 build = "build.rs"
 
+[features]
+# Dev-only fixture driver, fake clock endpoints and `X-Dev-User` admin auth
+# (T05). Never enabled in production builds.
+dev = ["dep:sources", "sources/fixture"]
+
 [dependencies]
+async-trait.workspace = true
 axum.workspace = true
+chrono.workspace = true
+domain.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sources = { workspace = true, optional = true }
+sqlx.workspace = true
 store.workspace = true
+sync.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tower-http.workspace = true
@@ -20,6 +32,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true
+sources = { workspace = true, features = ["fake", "fixture"] }
 tempfile.workspace = true
 tower.workspace = true
 

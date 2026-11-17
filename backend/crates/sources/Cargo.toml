@@ -11,6 +11,8 @@ publish.workspace = true
 # config entry. `fake` is an in-memory adapter for tests of other crates.
 [features]
 fake = []
+# The dev scenario source (T05). Never enabled in production builds.
+fixture = []
 
 [dependencies]
 async-trait.workspace = true

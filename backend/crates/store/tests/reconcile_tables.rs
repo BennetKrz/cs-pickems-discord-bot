@@ -270,3 +270,84 @@ async fn list_all_records_spans_sources() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn manual_links_and_records_can_be_removed() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    let ext = s.bo3.0.to_string();
+    refs::link(
+        &db.pool,
+        &refs::ExternalRef {
+            entity_type: EntityType::Match,
+            entity_id: s.bo3.0,
+            source: "manual".into(),
+            external_id: ext.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    refs::upsert_record(
+        &db.pool,
+        &SourceRecord {
+            source: "manual".into(),
+            entity_type: EntityType::Match,
+            external_id: ext.clone(),
+            payload: "{}".into(),
+            payload_hash: "h".into(),
+            fetched_at: at(9, 0),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        refs::unlink(&db.pool, "manual", EntityType::Match, &ext)
+            .await
+            .unwrap()
+    );
+    assert!(
+        refs::delete_record(&db.pool, "manual", EntityType::Match, &ext)
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        refs::resolve(&db.pool, "manual", EntityType::Match, &ext)
+            .await
+            .unwrap(),
+        None
+    );
+    assert!(
+        refs::get_record(&db.pool, "manual", EntityType::Match, &ext)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    // Removing again is a no-op.
+    assert!(
+        !refs::unlink(&db.pool, "manual", EntityType::Match, &ext)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !refs::delete_record(&db.pool, "manual", EntityType::Match, &ext)
+            .await
+            .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn voided_is_a_boolean() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    assert_rejected(
+        exec(
+            &db.pool,
+            format!("UPDATE matches SET voided = 2 WHERE id = {}", s.bo3.0),
+        )
+        .await,
+        "CHECK constraint failed",
+    );
+    let m = matches::get(&db.pool, s.bo3).await.unwrap().unwrap();
+    assert!(!m.fields.voided, "defaults to not voided");
+}

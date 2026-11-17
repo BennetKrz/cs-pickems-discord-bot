@@ -22,7 +22,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-sources = { workspace = true, features = ["fake"] }
+sources = { workspace = true, features = ["fake", "fixture"] }
 tempfile.workspace = true
 
 [lints]

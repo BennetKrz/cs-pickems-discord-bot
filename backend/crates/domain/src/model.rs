@@ -335,6 +335,9 @@ pub struct MatchFields {
     pub ended_at: Option<DateTime<Utc>>,
     pub lock_at: Option<DateTime<Utc>>,
     pub locked: bool,
+    /// An admin voided the match (T05): no points for anyone, picks are
+    /// kept. Only admin actions change it; the reconciler carries it over.
+    pub voided: bool,
     pub maps_won_a: u8,
     pub maps_won_b: u8,
     pub winner_team_id: Option<TeamId>,
@@ -342,7 +345,8 @@ pub struct MatchFields {
 }
 
 impl MatchFields {
-    /// A scheduled match with no score, no lock and no bracket position.
+    /// A scheduled match with no score, no lock, no void and no bracket
+    /// position.
     pub fn scheduled(
         event_id: EventId,
         team_a_id: Option<TeamId>,
@@ -362,6 +366,7 @@ impl MatchFields {
             ended_at: None,
             lock_at: scheduled_at,
             locked: false,
+            voided: false,
             maps_won_a: 0,
             maps_won_b: 0,
             winner_team_id: None,
@@ -507,5 +512,6 @@ mod tests {
         assert_eq!(m.lock_at, at);
         assert_eq!(m.status, MatchStatus::Scheduled);
         assert!(!m.locked);
+        assert!(!m.voided);
     }
 }
