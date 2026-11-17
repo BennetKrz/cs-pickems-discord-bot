@@ -141,6 +141,25 @@ pub async fn update(ex: impl SqliteExecutor<'_>, m: &Match) -> DbResult<bool> {
     Ok(res.rows_affected() == 1)
 }
 
+/// Locks the picks of every unlocked match whose `lock_at` has passed or
+/// that is already live or finished (T10 lock rule, run by the lock ticker
+/// in T06). Returns the IDs it locked; running it again locks nothing new.
+pub async fn lock_due(ex: impl SqliteExecutor<'_>, now: DateTime<Utc>) -> DbResult<Vec<MatchId>> {
+    sqlx::query_scalar(
+        "UPDATE matches SET locked = 1 \
+         WHERE locked = 0 AND (lock_at <= ? OR status IN ('live', 'finished')) \
+         RETURNING id",
+    )
+    .bind(Ts(now))
+    .fetch_all(ex)
+    .await
+    .map(|ids: Vec<i64>| {
+        let mut ids: Vec<MatchId> = ids.into_iter().map(MatchId).collect();
+        ids.sort_by_key(|id| id.0);
+        ids
+    })
+}
+
 pub async fn get(ex: impl SqliteExecutor<'_>, id: MatchId) -> DbResult<Option<Match>> {
     sqlx::query(concat!(
         "SELECT id, ",

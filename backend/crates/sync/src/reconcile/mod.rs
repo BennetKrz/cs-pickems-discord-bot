@@ -131,7 +131,7 @@ impl Reconciler {
     ) -> Result<(T, Report)> {
         let mut rep = Report::default();
         let mut out = Events::new();
-        let mut tx = self.pool.begin().await?;
+        let mut tx = store::begin_write(&self.pool).await?;
         let v = f(&mut tx, &mut rep, &mut out).await?;
         tx.commit().await?;
         rep.events += u32::try_from(out.len()).unwrap_or(u32::MAX);

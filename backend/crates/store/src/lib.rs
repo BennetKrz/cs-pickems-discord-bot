@@ -111,6 +111,18 @@ fn is_in_memory(path: &Path) -> bool {
     path.as_os_str() == ":memory:"
 }
 
+/// Starts a transaction that will write, with `BEGIN IMMEDIATE`.
+///
+/// SQLite allows one writer at a time. A plain (deferred) transaction that
+/// reads first and writes later fails at once with "database is locked" if
+/// another connection wrote in between; `busy_timeout` does not help there.
+/// An immediate transaction takes the write lock up front and so waits for
+/// `busy_timeout` instead. Use it for every read-then-write transaction
+/// that may run alongside other writers (sync, lock ticker, admin, picks).
+pub async fn begin_write(pool: &SqlitePool) -> DbResult<sqlx::Transaction<'static, sqlx::Sqlite>> {
+    pool.begin_with("BEGIN IMMEDIATE").await
+}
+
 /// Checks that the database answers a trivial query.
 pub async fn ping(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT 1").execute(pool).await.map(|_| ())

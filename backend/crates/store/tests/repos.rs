@@ -766,3 +766,112 @@ async fn repositories_compose_in_one_transaction() {
             .is_none()
     );
 }
+
+#[tokio::test]
+async fn lock_due_locks_started_and_passed_matches_once() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    // `bo3` locks at 18:00. A second match locks at 20:00 but is live.
+    let live = match_between(
+        &db.pool,
+        s.event,
+        Some(s.team_a),
+        Some(s.team_c),
+        MatchFormat::Bo1,
+    )
+    .await;
+    let mut m = matches::get(&db.pool, live).await.unwrap().unwrap();
+    m.fields.status = MatchStatus::Live;
+    m.fields.lock_at = Some(at(20, 0));
+    matches::update(&db.pool, &m).await.unwrap();
+    // No schedule: never locked by time.
+    let unscheduled = matches::insert(
+        &db.pool,
+        &MatchFields::scheduled(s.event, None, None, MatchFormat::Bo3, None),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        matches::lock_due(&db.pool, at(17, 59)).await.unwrap(),
+        vec![live]
+    );
+    assert_eq!(
+        matches::lock_due(&db.pool, at(18, 0)).await.unwrap(),
+        vec![s.bo3]
+    );
+    assert!(
+        matches::lock_due(&db.pool, at(23, 0))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let get = |id| matches::get(&db.pool, id);
+    assert!(get(s.bo3).await.unwrap().unwrap().fields.locked);
+    assert!(!get(unscheduled).await.unwrap().unwrap().fields.locked);
+}
+
+#[tokio::test]
+async fn followed_event_ids_span_guilds() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    let other = event(&db.pool, "Other").await;
+    assert!(
+        guilds::followed_event_ids(&db.pool)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    for (guild, ev) in [
+        (GUILD, other),
+        (GUILD, s.event),
+        ("100000000000000002", s.event),
+    ] {
+        guilds::follow_event(
+            &db.pool,
+            &FollowedEvent {
+                guild_id: guild.into(),
+                event_id: ev,
+                followed_by: ALICE.into(),
+                followed_at: at(9, 0),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    assert_eq!(
+        guilds::followed_event_ids(&db.pool).await.unwrap(),
+        vec![s.event, other]
+    );
+}
+
+#[tokio::test]
+async fn match_refs_for_event_lists_one_source() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    let other_event = event(&db.pool, "Other").await;
+    let elsewhere = match_between(&db.pool, other_event, None, None, MatchFormat::Bo1).await;
+    for (id, source, ext) in [
+        (s.bo3.0, "pandascore", "77"),
+        (s.bo3.0, "other", "x"),
+        (elsewhere.0, "pandascore", "78"),
+    ] {
+        refs::link(
+            &db.pool,
+            &ExternalRef {
+                entity_type: EntityType::Match,
+                entity_id: id,
+                source: source.into(),
+                external_id: ext.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    assert_eq!(
+        refs::match_refs_for_event(&db.pool, "pandascore", s.event.0)
+            .await
+            .unwrap(),
+        vec![(s.bo3.0, "77".to_owned())]
+    );
+}

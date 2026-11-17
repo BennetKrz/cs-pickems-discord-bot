@@ -1,7 +1,7 @@
 # T06 – Sync scheduler and API request budget
 
 - **Epic:** A – Foundation and data
-- **Status:** todo
+- **Status:** done
 - **Index:** [all tickets](README.md)
 
 **Goal:** keep the own DB fresh with as few external calls as possible.
@@ -30,7 +30,27 @@
 
 **Acceptance criteria**
 
-- [ ] With the fixture source and fake clock, a simulated busy day stays under budget: 3 followed events, 20 matches a day, 4 live at once.
-- [ ] Cadence changes as a match moves from upcoming to live to finished.
-- [ ] Killing the process mid-sync and restarting causes no duplicate data and no request burst.
-- [ ] The README states the expected request count for a typical and a busy day.
+- [x] With the fixture source and fake clock, a simulated busy day stays under budget: 3 followed events, 20 matches a day, 4 live at once.
+- [x] Cadence changes as a match moves from upcoming to live to finished.
+- [x] Killing the process mid-sync and restarting causes no duplicate data and no request burst.
+- [x] The README states the expected request count for a typical and a busy day.
+
+**Outcome (2026-11-17), see [ADR 0006](../adr/0006-sync-scheduler-budget.md):**
+
+- Owner decisions:
+  - T06 adds a minimal `GET /api/admin/status`; P5 extends it.
+  - `SyncHandle` plus `POST /api/admin/events/{id}/resync` for a manual resync.
+- One job per kind and source, each one batched call: `live`, `imminent`, `corrections`, `upcoming`, `structure:<event>`.
+  - `upcoming` (48 h) is not in the ticket's priority list. It sits between corrections and structure.
+  - Overdue scheduled matches keep the 5-minute cadence for up to 6 h.
+  - Canceled matches get no correction re-checks.
+- Budget: two token buckets per source, plus reserves of the hourly bucket for lower priorities (5–30%). Search is skipped, not queued, when the budget is short.
+- Cadences are configurable in `[sync]` / `SYNC__<KEY>`.
+- The busy-day test can't use the fixture source alone, because fixtures cost 0 and hold one event. It wraps three generated fixture scenarios in a test source priced like PandaScore.
+- Measured (README): a typical day uses about 305 requests, a busy day about 816. The peak is 60 per hour.
+
+**Follow-ups:**
+
+- **T09:** call `SyncHandle::sync_event_now` after following, and use `SyncHandle::search` for `/event search` (results are not ingested; ingest the chosen event when following).
+- **T10:** the lock ticker locks at `lock_at` or on `live`/`finished`; the pick API still checks `lock_at` per request. Open pick write transactions with `store::begin_write` (`BEGIN IMMEDIATE`), as the reconciler now does, so concurrent writers wait instead of failing with "database is locked".
+- **P1/P5:** there is no `MatchLocked` domain event and no `ops_events` table yet.

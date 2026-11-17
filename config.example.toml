@@ -20,6 +20,20 @@
 per_hour = 500
 per_minute = 30
 
+# Sync cadences (T06, docs/adr/0006-sync-scheduler-budget.md). Durations
+# like "30s", "5m", "6h", "2d". Env: SYNC__<KEY>, e.g. SYNC__LIVE_EVERY=2m.
+# [sync]
+# structure_every = "6h"      # followed event structure
+# upcoming_window = "48h"
+# upcoming_every = "30m"
+# imminent_window = "1h"
+# imminent_every = "5m"
+# overdue_window = "6h"       # keep polling a late start this long
+# live_every = "2m"
+# corrections_after = ["10m", "2h"]
+# search_cache = "24h"
+# lock_every = "30s"
+
 # Reconciliation (T03, docs/adr/0004-source-adapters-reconciliation.md).
 # Only the primary source creates events, teams and matches; other sources
 # attach to them or wait in the unlinked queue. Default: the first entry of

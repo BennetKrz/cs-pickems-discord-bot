@@ -129,6 +129,26 @@ pub async fn refs_of(
     .await
 }
 
+/// The external IDs one source has for the matches of an event, as
+/// `(match ID, external ID)` pairs ordered by match. For the sync scheduler
+/// (T06), which asks each source only for matches it knows.
+pub async fn match_refs_for_event(
+    ex: impl SqliteExecutor<'_>,
+    source: &str,
+    event_id: i64,
+) -> DbResult<Vec<(i64, String)>> {
+    sqlx::query_as(
+        "SELECT r.entity_id, r.external_id FROM external_refs r \
+         JOIN matches m ON m.id = r.entity_id \
+         WHERE r.source = ? AND r.entity_type = 'match' AND m.event_id = ? \
+         ORDER BY r.entity_id, r.external_id",
+    )
+    .bind(source)
+    .bind(event_id)
+    .fetch_all(ex)
+    .await
+}
+
 /// Stores the latest payload for an external entity. The payload is only
 /// rewritten when its hash changed; `fetched_at` always moves.
 pub async fn upsert_record<'a, A>(conn: A, rec: &SourceRecord) -> DbResult<RecordChange>

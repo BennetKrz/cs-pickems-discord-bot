@@ -32,6 +32,40 @@ pub fn reconciler(
     )
 }
 
+/// The sources the sync scheduler polls, with their budgets. `manual` has
+/// no adapter and `fixture` is driven by the dev clock (T05), so today this
+/// is PandaScore when enabled.
+pub fn scheduled_sources(config: &Config) -> anyhow::Result<Vec<sync::SourceEntry>> {
+    let mut out = Vec::new();
+    for id in &config.enabled_sources {
+        match id {
+            SourceId::Pandascore => {
+                let token = config
+                    .pandascore_token
+                    .as_ref()
+                    .context("PANDASCORE_TOKEN is not set")?;
+                let adapter = sources::pandascore::PandascoreAdapter::new(
+                    sources::pandascore::PandascoreConfig::new(token.expose()),
+                )
+                .context("building the PandaScore client")?;
+                out.push(sync::SourceEntry {
+                    adapter: Arc::new(adapter),
+                    budget: budget_of(config, *id),
+                });
+            }
+            SourceId::Manual | SourceId::Fixture => {}
+        }
+    }
+    Ok(out)
+}
+
+fn budget_of(config: &Config, id: SourceId) -> Option<sync::BudgetLimits> {
+    config.budgets.get(&id).map(|b| sync::BudgetLimits {
+        per_hour: b.per_hour,
+        per_minute: b.per_minute,
+    })
+}
+
 /// `app reconcile --replay`: rebuilds canonical data from `source_records`
 /// without any API calls, then exits. Domain events go nowhere, because no
 /// consumer runs in this process; settlement is a recompute (T11), so a
@@ -123,6 +157,27 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         }
     }
 
+    // Sync scheduler (T06) over the sources that make external calls. The
+    // fixture source is driven by the dev clock instead (T05).
+    let (scheduler, sync_handle) = sync::Scheduler::open(sync::SchedulerParts {
+        reconciler: reconciler.clone(),
+        clock: Arc::new(domain::SystemClock),
+        config: config.sync.clone(),
+        sources: scheduled_sources(&config)?,
+        seed: None,
+    })
+    .await
+    .context("starting the sync scheduler")?;
+    state = state.with_sync(sync_handle);
+    // The lock ticker follows the app clock, so in fixture mode it locks
+    // matches as the dev clock moves.
+    let lock_clock = state.clock.clone();
+    let lock_every = config
+        .sync
+        .lock_every
+        .to_std()
+        .context("SYNC__LOCK_EVERY")?;
+
     let listener = TcpListener::bind(config.bind_addr)
         .await
         .with_context(|| format!("binding {}", config.bind_addr))?;
@@ -133,7 +188,16 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     let bot_stop = CancellationToken::new();
     let http_stop = CancellationToken::new();
 
-    let sync_task = tokio::spawn(sync::run(bus, sync_stop.clone()));
+    let sync_task = {
+        let stop = sync_stop.clone();
+        let pool = pool.clone();
+        tokio::spawn(async move {
+            tokio::join!(
+                scheduler.run(stop.clone()),
+                sync::run_lock_ticker(pool, lock_clock, lock_every, stop),
+            );
+        })
+    };
     let bot_task = tokio::spawn(bot::run(bot_stop.clone()));
     let app = api::router_with(state, &config.static_dir, extra_api);
     let mut http_task = tokio::spawn(api::serve(listener, app, http_stop.clone()));

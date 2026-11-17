@@ -323,7 +323,7 @@ impl ManualService {
             &mut Vec<DomainEvent>,
         ) -> Result<()>,
     ) -> Result<Outcome> {
-        let mut tx = self.reconciler.pool().begin().await?;
+        let mut tx = store::begin_write(self.reconciler.pool()).await?;
         let cur = matches::get(&mut *tx, id)
             .await?
             .ok_or(ManualError::NotFound(id))?;
