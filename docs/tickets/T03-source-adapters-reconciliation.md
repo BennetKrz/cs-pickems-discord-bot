@@ -1,7 +1,7 @@
 # T03 – Data-source adapter framework and reconciliation
 
 - **Epic:** A – Foundation and data
-- **Status:** in review
+- **Status:** done
 - **Index:** [all tickets](README.md)
 
 **Goal:** any number of sources feed one canonical model, and the app only ever sees that model.

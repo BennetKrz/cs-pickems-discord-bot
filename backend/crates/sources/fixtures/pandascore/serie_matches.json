@@ -1,0 +1,1559 @@
+[
+  {
+    "tournament": {
+      "id": 22466,
+      "name": "Playoffs",
+      "type": "online",
+      "country": null,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "detailed_stats": true,
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": 137510,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026-playoffs",
+      "region": "NA",
+      "serie_id": 11212,
+      "modified_at": "2026-11-16T01:51:22Z",
+      "league_id": 5586,
+      "prizepool": "30000 United States Dollar",
+      "tier": "d",
+      "has_bracket": true,
+      "live_supported": false
+    },
+    "results": [
+      {
+        "team_id": 139608,
+        "score": 0
+      },
+      {
+        "team_id": 139204,
+        "score": 2
+      }
+    ],
+    "games": [
+      {
+        "complete": true,
+        "id": 239615,
+        "position": 1,
+        "status": "finished",
+        "length": 840,
+        "finished": true,
+        "match_id": 1814325,
+        "winner": {
+          "id": 139204,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T16:15:27Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T16:29:28Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239616,
+        "position": 2,
+        "status": "finished",
+        "length": 2017,
+        "finished": true,
+        "match_id": 1814325,
+        "winner": {
+          "id": 139204,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T16:32:53Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T17:06:30Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      }
+    ],
+    "detailed_stats": true,
+    "scheduled_at": "2026-11-15T16:15:00Z",
+    "videogame": {
+      "id": 3,
+      "name": "Counter-Strike",
+      "slug": "cs-go"
+    },
+    "videogame_title": {
+      "id": 13,
+      "name": "Counter-Strike 2",
+      "slug": "cs-2",
+      "videogame_id": 3
+    },
+    "number_of_games": 3,
+    "videogame_version": null,
+    "begin_at": "2026-11-15T16:15:27Z",
+    "league": {
+      "id": 5586,
+      "name": "Austin LAN",
+      "url": null,
+      "slug": "cs-go-austin-lan",
+      "modified_at": "2026-11-15T13:24:17Z",
+      "image_url": null
+    },
+    "original_scheduled_at": "2026-11-15T16:15:00Z",
+    "serie": {
+      "id": 11212,
+      "name": "",
+      "year": 2026,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": null,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026",
+      "modified_at": "2026-11-15T14:00:12Z",
+      "league_id": 5586,
+      "season": null,
+      "full_name": "2026"
+    },
+    "rescheduled": false,
+    "status": "finished",
+    "end_at": "2026-11-15T17:06:30Z",
+    "streams_list": [],
+    "modified_at": "2026-11-15T17:09:43Z",
+    "draw": false,
+    "winner_type": "Team",
+    "winner_id": 139204,
+    "league_id": 5586,
+    "id": 1814325,
+    "name": "5th-6th Place Decider: Arnie's Acolytes vs Celestial",
+    "tournament_id": 22466,
+    "winner": {
+      "id": 139204,
+      "name": "Celestial",
+      "location": "",
+      "slug": "celestial",
+      "modified_at": "2026-11-15T13:36:08Z",
+      "acronym": null,
+      "image_url": "https://cdn-api.pandascore.co/images/team/image/139204/celestial_titan_lightmode.png",
+      "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/139204/celestial_titan_darkmode.png"
+    },
+    "forfeit": false,
+    "live": {
+      "supported": false,
+      "url": null,
+      "opens_at": null
+    },
+    "opponents": [
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 139608,
+          "name": "Arnie's Acolytes",
+          "location": "US",
+          "slug": "arnie-s-acolytes",
+          "modified_at": "2026-11-15T16:30:58Z",
+          "acronym": null,
+          "image_url": null,
+          "dark_mode_image_url": null
+        }
+      },
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 139204,
+          "name": "Celestial",
+          "location": "",
+          "slug": "celestial",
+          "modified_at": "2026-11-15T13:36:08Z",
+          "acronym": null,
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/139204/celestial_titan_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/139204/celestial_titan_darkmode.png"
+        }
+      }
+    ],
+    "serie_id": 11212,
+    "slug": "arnie-s-acolytes-vs-celestial-2026-11-15",
+    "match_type": "best_of",
+    "game_advantage": null
+  },
+  {
+    "tournament": {
+      "id": 22466,
+      "name": "Playoffs",
+      "type": "online",
+      "country": null,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "detailed_stats": true,
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": 137510,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026-playoffs",
+      "region": "NA",
+      "serie_id": 11212,
+      "modified_at": "2026-11-16T01:51:22Z",
+      "league_id": 5586,
+      "prizepool": "30000 United States Dollar",
+      "tier": "d",
+      "has_bracket": true,
+      "live_supported": false
+    },
+    "results": [
+      {
+        "team_id": 134300,
+        "score": 2
+      },
+      {
+        "team_id": 138621,
+        "score": 0
+      }
+    ],
+    "games": [
+      {
+        "complete": true,
+        "id": 239612,
+        "position": 1,
+        "status": "finished",
+        "length": 2472,
+        "finished": true,
+        "match_id": 1814324,
+        "winner": {
+          "id": 134300,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T16:16:38Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T16:57:50Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239613,
+        "position": 2,
+        "status": "finished",
+        "length": 2330,
+        "finished": true,
+        "match_id": 1814324,
+        "winner": {
+          "id": 134300,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T16:57:52Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T17:36:42Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      }
+    ],
+    "detailed_stats": true,
+    "scheduled_at": "2026-11-15T16:15:00Z",
+    "videogame": {
+      "id": 3,
+      "name": "Counter-Strike",
+      "slug": "cs-go"
+    },
+    "videogame_title": {
+      "id": 13,
+      "name": "Counter-Strike 2",
+      "slug": "cs-2",
+      "videogame_id": 3
+    },
+    "number_of_games": 3,
+    "videogame_version": null,
+    "begin_at": "2026-11-15T16:16:38Z",
+    "league": {
+      "id": 5586,
+      "name": "Austin LAN",
+      "url": null,
+      "slug": "cs-go-austin-lan",
+      "modified_at": "2026-11-15T13:24:17Z",
+      "image_url": null
+    },
+    "original_scheduled_at": "2026-11-15T16:15:00Z",
+    "serie": {
+      "id": 11212,
+      "name": "",
+      "year": 2026,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": null,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026",
+      "modified_at": "2026-11-15T14:00:12Z",
+      "league_id": 5586,
+      "season": null,
+      "full_name": "2026"
+    },
+    "rescheduled": false,
+    "status": "finished",
+    "end_at": "2026-11-15T17:36:42Z",
+    "streams_list": [],
+    "modified_at": "2026-11-15T17:40:15Z",
+    "draw": false,
+    "winner_type": "Team",
+    "winner_id": 134300,
+    "league_id": 5586,
+    "id": 1814324,
+    "name": "5th-6th Place Decider: NT vs Secret",
+    "tournament_id": 22466,
+    "winner": {
+      "id": 134300,
+      "name": "NuTorious",
+      "location": "US",
+      "slug": "nutorious",
+      "modified_at": "2026-11-15T13:37:09Z",
+      "acronym": "NT",
+      "image_url": "https://cdn-api.pandascore.co/images/team/image/134300/232px_nu_torious_lightmode.png",
+      "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/134300/625px_nu_torious_darkmode.png"
+    },
+    "forfeit": false,
+    "live": {
+      "supported": false,
+      "url": null,
+      "opens_at": null
+    },
+    "opponents": [
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 134300,
+          "name": "NuTorious",
+          "location": "US",
+          "slug": "nutorious",
+          "modified_at": "2026-11-15T13:37:09Z",
+          "acronym": "NT",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/134300/232px_nu_torious_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/134300/625px_nu_torious_darkmode.png"
+        }
+      },
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 138621,
+          "name": "It's a Secret",
+          "location": "US",
+          "slug": "it-s-a-secret",
+          "modified_at": "2026-11-15T13:33:56Z",
+          "acronym": "Secret",
+          "image_url": null,
+          "dark_mode_image_url": null
+        }
+      }
+    ],
+    "serie_id": 11212,
+    "slug": "nutorious-vs-it-s-a-secret-2026-11-15",
+    "match_type": "best_of",
+    "game_advantage": null
+  },
+  {
+    "tournament": {
+      "id": 22466,
+      "name": "Playoffs",
+      "type": "online",
+      "country": null,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "detailed_stats": true,
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": 137510,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026-playoffs",
+      "region": "NA",
+      "serie_id": 11212,
+      "modified_at": "2026-11-16T01:51:22Z",
+      "league_id": 5586,
+      "prizepool": "30000 United States Dollar",
+      "tier": "d",
+      "has_bracket": true,
+      "live_supported": false
+    },
+    "results": [
+      {
+        "team_id": 137510,
+        "score": 3
+      },
+      {
+        "team_id": 132366,
+        "score": 0
+      }
+    ],
+    "games": [
+      {
+        "complete": true,
+        "id": 239607,
+        "position": 1,
+        "status": "finished",
+        "length": 3028,
+        "finished": true,
+        "match_id": 1814198,
+        "winner": {
+          "id": 137510,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T23:17:11Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-16T00:07:40Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239608,
+        "position": 2,
+        "status": "finished",
+        "length": 2156,
+        "finished": true,
+        "match_id": 1814198,
+        "winner": {
+          "id": 137510,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-16T00:21:07Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-16T00:57:04Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239609,
+        "position": 3,
+        "status": "finished",
+        "length": 2038,
+        "finished": true,
+        "match_id": 1814198,
+        "winner": {
+          "id": 137510,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-16T01:17:23Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-16T01:51:22Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      }
+    ],
+    "detailed_stats": true,
+    "scheduled_at": "2026-11-15T23:15:00Z",
+    "videogame": {
+      "id": 3,
+      "name": "Counter-Strike",
+      "slug": "cs-go"
+    },
+    "videogame_title": {
+      "id": 13,
+      "name": "Counter-Strike 2",
+      "slug": "cs-2",
+      "videogame_id": 3
+    },
+    "number_of_games": 5,
+    "videogame_version": null,
+    "begin_at": "2026-11-15T23:17:11Z",
+    "league": {
+      "id": 5586,
+      "name": "Austin LAN",
+      "url": null,
+      "slug": "cs-go-austin-lan",
+      "modified_at": "2026-11-15T13:24:17Z",
+      "image_url": null
+    },
+    "original_scheduled_at": "2026-11-15T23:15:00Z",
+    "serie": {
+      "id": 11212,
+      "name": "",
+      "year": 2026,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": null,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026",
+      "modified_at": "2026-11-15T14:00:12Z",
+      "league_id": 5586,
+      "season": null,
+      "full_name": "2026"
+    },
+    "rescheduled": false,
+    "status": "finished",
+    "end_at": "2026-11-16T01:51:21Z",
+    "streams_list": [],
+    "modified_at": "2026-11-16T01:54:17Z",
+    "draw": false,
+    "winner_type": "Team",
+    "winner_id": 137510,
+    "league_id": 5586,
+    "id": 1814198,
+    "name": "Grand Final: VOCA vs LAG",
+    "tournament_id": 22466,
+    "winner": {
+      "id": 137510,
+      "name": "Voca",
+      "location": "US",
+      "slug": "voca",
+      "modified_at": "2026-11-15T13:37:06Z",
+      "acronym": "VOCA",
+      "image_url": "https://cdn-api.pandascore.co/images/team/image/137510/190px_team_voca_lightmode.png",
+      "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/137510/190px_team_voca_darkmode.png"
+    },
+    "forfeit": false,
+    "live": {
+      "supported": false,
+      "url": null,
+      "opens_at": null
+    },
+    "opponents": [
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 137510,
+          "name": "Voca",
+          "location": "US",
+          "slug": "voca",
+          "modified_at": "2026-11-15T13:37:06Z",
+          "acronym": "VOCA",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/137510/190px_team_voca_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/137510/190px_team_voca_darkmode.png"
+        }
+      },
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 132366,
+          "name": "LAG Gaming",
+          "location": "US",
+          "slug": "lag-gaming",
+          "modified_at": "2026-11-15T13:38:51Z",
+          "acronym": "LAG",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/132366/190px_lag_gaming_us_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/132366/190px_lag_gaming_us_darkmode.png"
+        }
+      }
+    ],
+    "serie_id": 11212,
+    "slug": "voca-2026-11-16",
+    "match_type": "best_of",
+    "game_advantage": null
+  },
+  {
+    "tournament": {
+      "id": 22466,
+      "name": "Playoffs",
+      "type": "online",
+      "country": null,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "detailed_stats": true,
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": 137510,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026-playoffs",
+      "region": "NA",
+      "serie_id": 11212,
+      "modified_at": "2026-11-16T01:51:22Z",
+      "league_id": 5586,
+      "prizepool": "30000 United States Dollar",
+      "tier": "d",
+      "has_bracket": true,
+      "live_supported": false
+    },
+    "results": [
+      {
+        "team_id": 132366,
+        "score": 2
+      },
+      {
+        "team_id": 129547,
+        "score": 1
+      }
+    ],
+    "games": [
+      {
+        "complete": true,
+        "id": 239604,
+        "position": 1,
+        "status": "finished",
+        "length": 2462,
+        "finished": true,
+        "match_id": 1814197,
+        "winner": {
+          "id": 129547,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T16:10:44Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T16:51:46Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239605,
+        "position": 2,
+        "status": "finished",
+        "length": 2460,
+        "finished": true,
+        "match_id": 1814197,
+        "winner": {
+          "id": 132366,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T16:57:15Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T17:38:15Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239606,
+        "position": 3,
+        "status": "finished",
+        "length": 2051,
+        "finished": true,
+        "match_id": 1814197,
+        "winner": {
+          "id": 132366,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T17:55:20Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T18:29:32Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      }
+    ],
+    "detailed_stats": true,
+    "scheduled_at": "2026-11-15T16:15:00Z",
+    "videogame": {
+      "id": 3,
+      "name": "Counter-Strike",
+      "slug": "cs-go"
+    },
+    "videogame_title": {
+      "id": 13,
+      "name": "Counter-Strike 2",
+      "slug": "cs-2",
+      "videogame_id": 3
+    },
+    "number_of_games": 3,
+    "videogame_version": null,
+    "begin_at": "2026-11-15T16:10:44Z",
+    "league": {
+      "id": 5586,
+      "name": "Austin LAN",
+      "url": null,
+      "slug": "cs-go-austin-lan",
+      "modified_at": "2026-11-15T13:24:17Z",
+      "image_url": null
+    },
+    "original_scheduled_at": "2026-11-15T16:15:00Z",
+    "serie": {
+      "id": 11212,
+      "name": "",
+      "year": 2026,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": null,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026",
+      "modified_at": "2026-11-15T14:00:12Z",
+      "league_id": 5586,
+      "season": null,
+      "full_name": "2026"
+    },
+    "rescheduled": false,
+    "status": "finished",
+    "end_at": "2026-11-15T18:29:31Z",
+    "streams_list": [],
+    "modified_at": "2026-11-15T18:33:58Z",
+    "draw": false,
+    "winner_type": "Team",
+    "winner_id": 132366,
+    "league_id": 5586,
+    "id": 1814197,
+    "name": "Semifinal 2: LAG vs DTN",
+    "tournament_id": 22466,
+    "winner": {
+      "id": 132366,
+      "name": "LAG Gaming",
+      "location": "US",
+      "slug": "lag-gaming",
+      "modified_at": "2026-11-15T13:38:51Z",
+      "acronym": "LAG",
+      "image_url": "https://cdn-api.pandascore.co/images/team/image/132366/190px_lag_gaming_us_lightmode.png",
+      "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/132366/190px_lag_gaming_us_darkmode.png"
+    },
+    "forfeit": false,
+    "live": {
+      "supported": false,
+      "url": null,
+      "opens_at": null
+    },
+    "opponents": [
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 132366,
+          "name": "LAG Gaming",
+          "location": "US",
+          "slug": "lag-gaming",
+          "modified_at": "2026-11-15T13:38:51Z",
+          "acronym": "LAG",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/132366/190px_lag_gaming_us_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/132366/190px_lag_gaming_us_darkmode.png"
+        }
+      },
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 129547,
+          "name": "Detonate",
+          "location": "US",
+          "slug": "detonate",
+          "modified_at": "2026-11-15T13:36:07Z",
+          "acronym": "DTN",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/129547/145px_detonate_allmode.png",
+          "dark_mode_image_url": null
+        }
+      }
+    ],
+    "serie_id": 11212,
+    "slug": "lag-gaming-vs-detonate-2026-11-15",
+    "match_type": "best_of",
+    "game_advantage": null
+  },
+  {
+    "tournament": {
+      "id": 22466,
+      "name": "Playoffs",
+      "type": "online",
+      "country": null,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "detailed_stats": true,
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": 137510,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026-playoffs",
+      "region": "NA",
+      "serie_id": 11212,
+      "modified_at": "2026-11-16T01:51:22Z",
+      "league_id": 5586,
+      "prizepool": "30000 United States Dollar",
+      "tier": "d",
+      "has_bracket": true,
+      "live_supported": false
+    },
+    "results": [
+      {
+        "team_id": 137510,
+        "score": 2
+      },
+      {
+        "team_id": 138716,
+        "score": 0
+      }
+    ],
+    "games": [
+      {
+        "complete": true,
+        "id": 239601,
+        "position": 1,
+        "status": "finished",
+        "length": 2433,
+        "finished": true,
+        "match_id": 1814196,
+        "winner": {
+          "id": 137510,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T16:23:14Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T17:03:48Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239602,
+        "position": 2,
+        "status": "finished",
+        "length": 2435,
+        "finished": true,
+        "match_id": 1814196,
+        "winner": {
+          "id": 137510,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T17:17:36Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T17:58:11Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      }
+    ],
+    "detailed_stats": true,
+    "scheduled_at": "2026-11-15T16:15:00Z",
+    "videogame": {
+      "id": 3,
+      "name": "Counter-Strike",
+      "slug": "cs-go"
+    },
+    "videogame_title": {
+      "id": 13,
+      "name": "Counter-Strike 2",
+      "slug": "cs-2",
+      "videogame_id": 3
+    },
+    "number_of_games": 3,
+    "videogame_version": null,
+    "begin_at": "2026-11-15T16:23:14Z",
+    "league": {
+      "id": 5586,
+      "name": "Austin LAN",
+      "url": null,
+      "slug": "cs-go-austin-lan",
+      "modified_at": "2026-11-15T13:24:17Z",
+      "image_url": null
+    },
+    "original_scheduled_at": "2026-11-15T16:15:00Z",
+    "serie": {
+      "id": 11212,
+      "name": "",
+      "year": 2026,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": null,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026",
+      "modified_at": "2026-11-15T14:00:12Z",
+      "league_id": 5586,
+      "season": null,
+      "full_name": "2026"
+    },
+    "rescheduled": false,
+    "status": "finished",
+    "end_at": "2026-11-15T17:58:11Z",
+    "streams_list": [],
+    "modified_at": "2026-11-15T18:02:47Z",
+    "draw": false,
+    "winner_type": "Team",
+    "winner_id": 137510,
+    "league_id": 5586,
+    "id": 1814196,
+    "name": "Semifinal 1: VOCA vs IOWA",
+    "tournament_id": 22466,
+    "winner": {
+      "id": 137510,
+      "name": "Voca",
+      "location": "US",
+      "slug": "voca",
+      "modified_at": "2026-11-15T13:37:06Z",
+      "acronym": "VOCA",
+      "image_url": "https://cdn-api.pandascore.co/images/team/image/137510/190px_team_voca_lightmode.png",
+      "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/137510/190px_team_voca_darkmode.png"
+    },
+    "forfeit": false,
+    "live": {
+      "supported": false,
+      "url": null,
+      "opens_at": null
+    },
+    "opponents": [
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 137510,
+          "name": "Voca",
+          "location": "US",
+          "slug": "voca",
+          "modified_at": "2026-11-15T13:37:06Z",
+          "acronym": "VOCA",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/137510/190px_team_voca_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/137510/190px_team_voca_darkmode.png"
+        }
+      },
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 138716,
+          "name": "Iowa Stormboar",
+          "location": "US",
+          "slug": "iowa-stormboar",
+          "modified_at": "2026-11-15T13:33:55Z",
+          "acronym": "IOWA",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/138716/iowa_stormboar_allmode.png",
+          "dark_mode_image_url": null
+        }
+      }
+    ],
+    "serie_id": 11212,
+    "slug": "voca-vs-iowa-stormboar-2026-11-15",
+    "match_type": "best_of",
+    "game_advantage": null
+  },
+  {
+    "tournament": {
+      "id": 22466,
+      "name": "Playoffs",
+      "type": "online",
+      "country": null,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "detailed_stats": true,
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": 137510,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026-playoffs",
+      "region": "NA",
+      "serie_id": 11212,
+      "modified_at": "2026-11-16T01:51:22Z",
+      "league_id": 5586,
+      "prizepool": "30000 United States Dollar",
+      "tier": "d",
+      "has_bracket": true,
+      "live_supported": false
+    },
+    "results": [
+      {
+        "team_id": 129547,
+        "score": 2
+      },
+      {
+        "team_id": 139204,
+        "score": 0
+      }
+    ],
+    "games": [
+      {
+        "complete": true,
+        "id": 239598,
+        "position": 1,
+        "status": "finished",
+        "length": null,
+        "finished": true,
+        "match_id": 1814195,
+        "winner": {
+          "id": 129547,
+          "type": "Team"
+        },
+        "begin_at": null,
+        "detailed_stats": true,
+        "end_at": null,
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239599,
+        "position": 2,
+        "status": "finished",
+        "length": null,
+        "finished": true,
+        "match_id": 1814195,
+        "winner": {
+          "id": 129547,
+          "type": "Team"
+        },
+        "begin_at": null,
+        "detailed_stats": true,
+        "end_at": null,
+        "forfeit": false,
+        "winner_type": "Team"
+      }
+    ],
+    "detailed_stats": true,
+    "scheduled_at": "2026-11-15T01:45:00Z",
+    "videogame": {
+      "id": 3,
+      "name": "Counter-Strike",
+      "slug": "cs-go"
+    },
+    "videogame_title": {
+      "id": 13,
+      "name": "Counter-Strike 2",
+      "slug": "cs-2",
+      "videogame_id": 3
+    },
+    "number_of_games": 3,
+    "videogame_version": null,
+    "begin_at": null,
+    "league": {
+      "id": 5586,
+      "name": "Austin LAN",
+      "url": null,
+      "slug": "cs-go-austin-lan",
+      "modified_at": "2026-11-15T13:24:17Z",
+      "image_url": null
+    },
+    "original_scheduled_at": "2026-11-15T01:45:00Z",
+    "serie": {
+      "id": 11212,
+      "name": "",
+      "year": 2026,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": null,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026",
+      "modified_at": "2026-11-15T14:00:12Z",
+      "league_id": 5586,
+      "season": null,
+      "full_name": "2026"
+    },
+    "rescheduled": false,
+    "status": "finished",
+    "end_at": null,
+    "streams_list": [],
+    "modified_at": "2026-11-15T14:00:12Z",
+    "draw": false,
+    "winner_type": "Team",
+    "winner_id": 129547,
+    "league_id": 5586,
+    "id": 1814195,
+    "name": "Quarterfinal 4: DTN vs Celestial",
+    "tournament_id": 22466,
+    "winner": {
+      "id": 129547,
+      "name": "Detonate",
+      "location": "US",
+      "slug": "detonate",
+      "modified_at": "2026-11-15T13:36:07Z",
+      "acronym": "DTN",
+      "image_url": "https://cdn-api.pandascore.co/images/team/image/129547/145px_detonate_allmode.png",
+      "dark_mode_image_url": null
+    },
+    "forfeit": false,
+    "live": {
+      "supported": false,
+      "url": null,
+      "opens_at": null
+    },
+    "opponents": [
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 129547,
+          "name": "Detonate",
+          "location": "US",
+          "slug": "detonate",
+          "modified_at": "2026-11-15T13:36:07Z",
+          "acronym": "DTN",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/129547/145px_detonate_allmode.png",
+          "dark_mode_image_url": null
+        }
+      },
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 139204,
+          "name": "Celestial",
+          "location": "",
+          "slug": "celestial",
+          "modified_at": "2026-11-15T13:36:08Z",
+          "acronym": null,
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/139204/celestial_titan_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/139204/celestial_titan_darkmode.png"
+        }
+      }
+    ],
+    "serie_id": 11212,
+    "slug": "detonate-vs-celestial-2026-11-15",
+    "match_type": "best_of",
+    "game_advantage": null
+  },
+  {
+    "tournament": {
+      "id": 22466,
+      "name": "Playoffs",
+      "type": "online",
+      "country": null,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "detailed_stats": true,
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": 137510,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026-playoffs",
+      "region": "NA",
+      "serie_id": 11212,
+      "modified_at": "2026-11-16T01:51:22Z",
+      "league_id": 5586,
+      "prizepool": "30000 United States Dollar",
+      "tier": "d",
+      "has_bracket": true,
+      "live_supported": false
+    },
+    "results": [
+      {
+        "team_id": 132366,
+        "score": 2
+      },
+      {
+        "team_id": 139608,
+        "score": 0
+      }
+    ],
+    "games": [
+      {
+        "complete": true,
+        "id": 239595,
+        "position": 1,
+        "status": "finished",
+        "length": 17,
+        "finished": true,
+        "match_id": 1814194,
+        "winner": {
+          "id": 132366,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T02:20:14Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T02:55:32Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239596,
+        "position": 2,
+        "status": "finished",
+        "length": 2,
+        "finished": true,
+        "match_id": 1814194,
+        "winner": {
+          "id": 132366,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T03:00:34Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T03:50:37Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      }
+    ],
+    "detailed_stats": true,
+    "scheduled_at": "2026-11-15T02:20:00Z",
+    "videogame": {
+      "id": 3,
+      "name": "Counter-Strike",
+      "slug": "cs-go"
+    },
+    "videogame_title": {
+      "id": 13,
+      "name": "Counter-Strike 2",
+      "slug": "cs-2",
+      "videogame_id": 3
+    },
+    "number_of_games": 3,
+    "videogame_version": null,
+    "begin_at": "2026-11-15T02:20:14Z",
+    "league": {
+      "id": 5586,
+      "name": "Austin LAN",
+      "url": null,
+      "slug": "cs-go-austin-lan",
+      "modified_at": "2026-11-15T13:24:17Z",
+      "image_url": null
+    },
+    "original_scheduled_at": "2026-11-15T02:20:00Z",
+    "serie": {
+      "id": 11212,
+      "name": "",
+      "year": 2026,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": null,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026",
+      "modified_at": "2026-11-15T14:00:12Z",
+      "league_id": 5586,
+      "season": null,
+      "full_name": "2026"
+    },
+    "rescheduled": false,
+    "status": "finished",
+    "end_at": "2026-11-15T03:50:36Z",
+    "streams_list": [],
+    "modified_at": "2026-11-15T14:00:12Z",
+    "draw": false,
+    "winner_type": "Team",
+    "winner_id": 132366,
+    "league_id": 5586,
+    "id": 1814194,
+    "name": "Quarterfinal 3: LAG vs Arnie's Acolytes",
+    "tournament_id": 22466,
+    "winner": {
+      "id": 132366,
+      "name": "LAG Gaming",
+      "location": "US",
+      "slug": "lag-gaming",
+      "modified_at": "2026-11-15T13:38:51Z",
+      "acronym": "LAG",
+      "image_url": "https://cdn-api.pandascore.co/images/team/image/132366/190px_lag_gaming_us_lightmode.png",
+      "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/132366/190px_lag_gaming_us_darkmode.png"
+    },
+    "forfeit": false,
+    "live": {
+      "supported": false,
+      "url": null,
+      "opens_at": null
+    },
+    "opponents": [
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 132366,
+          "name": "LAG Gaming",
+          "location": "US",
+          "slug": "lag-gaming",
+          "modified_at": "2026-11-15T13:38:51Z",
+          "acronym": "LAG",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/132366/190px_lag_gaming_us_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/132366/190px_lag_gaming_us_darkmode.png"
+        }
+      },
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 139608,
+          "name": "Arnie's Acolytes",
+          "location": "US",
+          "slug": "arnie-s-acolytes",
+          "modified_at": "2026-11-15T16:30:58Z",
+          "acronym": null,
+          "image_url": null,
+          "dark_mode_image_url": null
+        }
+      }
+    ],
+    "serie_id": 11212,
+    "slug": "lag-gaming-vs-arnie-s-acolytes-2026-11-15",
+    "match_type": "best_of",
+    "game_advantage": null
+  },
+  {
+    "tournament": {
+      "id": 22466,
+      "name": "Playoffs",
+      "type": "online",
+      "country": null,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "detailed_stats": true,
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": 137510,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026-playoffs",
+      "region": "NA",
+      "serie_id": 11212,
+      "modified_at": "2026-11-16T01:51:22Z",
+      "league_id": 5586,
+      "prizepool": "30000 United States Dollar",
+      "tier": "d",
+      "has_bracket": true,
+      "live_supported": false
+    },
+    "results": [
+      {
+        "team_id": 138716,
+        "score": 2
+      },
+      {
+        "team_id": 138621,
+        "score": 0
+      }
+    ],
+    "games": [
+      {
+        "complete": true,
+        "id": 239592,
+        "position": 1,
+        "status": "finished",
+        "length": 7,
+        "finished": true,
+        "match_id": 1814193,
+        "winner": {
+          "id": 138716,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T01:45:44Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T02:45:52Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239593,
+        "position": 2,
+        "status": "finished",
+        "length": 3,
+        "finished": true,
+        "match_id": 1814193,
+        "winner": {
+          "id": 138716,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T02:55:54Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T03:40:58Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      }
+    ],
+    "detailed_stats": true,
+    "scheduled_at": "2026-11-15T01:45:00Z",
+    "videogame": {
+      "id": 3,
+      "name": "Counter-Strike",
+      "slug": "cs-go"
+    },
+    "videogame_title": {
+      "id": 13,
+      "name": "Counter-Strike 2",
+      "slug": "cs-2",
+      "videogame_id": 3
+    },
+    "number_of_games": 3,
+    "videogame_version": null,
+    "begin_at": "2026-11-15T01:45:44Z",
+    "league": {
+      "id": 5586,
+      "name": "Austin LAN",
+      "url": null,
+      "slug": "cs-go-austin-lan",
+      "modified_at": "2026-11-15T13:24:17Z",
+      "image_url": null
+    },
+    "original_scheduled_at": "2026-11-15T01:45:00Z",
+    "serie": {
+      "id": 11212,
+      "name": "",
+      "year": 2026,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": null,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026",
+      "modified_at": "2026-11-15T14:00:12Z",
+      "league_id": 5586,
+      "season": null,
+      "full_name": "2026"
+    },
+    "rescheduled": false,
+    "status": "finished",
+    "end_at": "2026-11-15T03:40:57Z",
+    "streams_list": [],
+    "modified_at": "2026-11-15T14:00:12Z",
+    "draw": false,
+    "winner_type": "Team",
+    "winner_id": 138716,
+    "league_id": 5586,
+    "id": 1814193,
+    "name": "Quarterfinal 2: IOWA vs Secret",
+    "tournament_id": 22466,
+    "winner": {
+      "id": 138716,
+      "name": "Iowa Stormboar",
+      "location": "US",
+      "slug": "iowa-stormboar",
+      "modified_at": "2026-11-15T13:33:55Z",
+      "acronym": "IOWA",
+      "image_url": "https://cdn-api.pandascore.co/images/team/image/138716/iowa_stormboar_allmode.png",
+      "dark_mode_image_url": null
+    },
+    "forfeit": false,
+    "live": {
+      "supported": false,
+      "url": null,
+      "opens_at": null
+    },
+    "opponents": [
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 138716,
+          "name": "Iowa Stormboar",
+          "location": "US",
+          "slug": "iowa-stormboar",
+          "modified_at": "2026-11-15T13:33:55Z",
+          "acronym": "IOWA",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/138716/iowa_stormboar_allmode.png",
+          "dark_mode_image_url": null
+        }
+      },
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 138621,
+          "name": "It's a Secret",
+          "location": "US",
+          "slug": "it-s-a-secret",
+          "modified_at": "2026-11-15T13:33:56Z",
+          "acronym": "Secret",
+          "image_url": null,
+          "dark_mode_image_url": null
+        }
+      }
+    ],
+    "serie_id": 11212,
+    "slug": "iowa-stormboar-vs-it-s-a-secret-2026-11-15",
+    "match_type": "best_of",
+    "game_advantage": null
+  },
+  {
+    "tournament": {
+      "id": 22466,
+      "name": "Playoffs",
+      "type": "online",
+      "country": null,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "detailed_stats": true,
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": 137510,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026-playoffs",
+      "region": "NA",
+      "serie_id": 11212,
+      "modified_at": "2026-11-16T01:51:22Z",
+      "league_id": 5586,
+      "prizepool": "30000 United States Dollar",
+      "tier": "d",
+      "has_bracket": true,
+      "live_supported": false
+    },
+    "results": [
+      {
+        "team_id": 137510,
+        "score": 2
+      },
+      {
+        "team_id": 134300,
+        "score": 0
+      }
+    ],
+    "games": [
+      {
+        "complete": true,
+        "id": 239589,
+        "position": 1,
+        "status": "finished",
+        "length": null,
+        "finished": true,
+        "match_id": 1814192,
+        "winner": {
+          "id": 137510,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T01:45:00Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T02:40:00Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      },
+      {
+        "complete": true,
+        "id": 239590,
+        "position": 2,
+        "status": "finished",
+        "length": null,
+        "finished": true,
+        "match_id": 1814192,
+        "winner": {
+          "id": 137510,
+          "type": "Team"
+        },
+        "begin_at": "2026-11-15T02:50:00Z",
+        "detailed_stats": true,
+        "end_at": "2026-11-15T03:55:00Z",
+        "forfeit": false,
+        "winner_type": "Team"
+      }
+    ],
+    "detailed_stats": true,
+    "scheduled_at": "2026-11-15T01:45:00Z",
+    "videogame": {
+      "id": 3,
+      "name": "Counter-Strike",
+      "slug": "cs-go"
+    },
+    "videogame_title": {
+      "id": 13,
+      "name": "Counter-Strike 2",
+      "slug": "cs-2",
+      "videogame_id": 3
+    },
+    "number_of_games": 3,
+    "videogame_version": null,
+    "begin_at": "2026-11-15T01:45:00Z",
+    "league": {
+      "id": 5586,
+      "name": "Austin LAN",
+      "url": null,
+      "slug": "cs-go-austin-lan",
+      "modified_at": "2026-11-15T13:24:17Z",
+      "image_url": null
+    },
+    "original_scheduled_at": "2026-11-15T01:45:00Z",
+    "serie": {
+      "id": 11212,
+      "name": "",
+      "year": 2026,
+      "begin_at": "2026-11-15T01:00:00Z",
+      "end_at": "2026-11-16T03:00:00Z",
+      "winner_id": null,
+      "winner_type": "Team",
+      "slug": "cs-go-austin-lan-2026",
+      "modified_at": "2026-11-15T14:00:12Z",
+      "league_id": 5586,
+      "season": null,
+      "full_name": "2026"
+    },
+    "rescheduled": false,
+    "status": "finished",
+    "end_at": "2026-11-15T03:55:00Z",
+    "streams_list": [],
+    "modified_at": "2026-11-15T14:00:12Z",
+    "draw": false,
+    "winner_type": "Team",
+    "winner_id": 137510,
+    "league_id": 5586,
+    "id": 1814192,
+    "name": "Quarterfinal 1: VOCA vs NT",
+    "tournament_id": 22466,
+    "winner": {
+      "id": 137510,
+      "name": "Voca",
+      "location": "US",
+      "slug": "voca",
+      "modified_at": "2026-11-15T13:37:06Z",
+      "acronym": "VOCA",
+      "image_url": "https://cdn-api.pandascore.co/images/team/image/137510/190px_team_voca_lightmode.png",
+      "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/137510/190px_team_voca_darkmode.png"
+    },
+    "forfeit": false,
+    "live": {
+      "supported": false,
+      "url": null,
+      "opens_at": null
+    },
+    "opponents": [
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 137510,
+          "name": "Voca",
+          "location": "US",
+          "slug": "voca",
+          "modified_at": "2026-11-15T13:37:06Z",
+          "acronym": "VOCA",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/137510/190px_team_voca_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/137510/190px_team_voca_darkmode.png"
+        }
+      },
+      {
+        "type": "Team",
+        "opponent": {
+          "id": 134300,
+          "name": "NuTorious",
+          "location": "US",
+          "slug": "nutorious",
+          "modified_at": "2026-11-15T13:37:09Z",
+          "acronym": "NT",
+          "image_url": "https://cdn-api.pandascore.co/images/team/image/134300/232px_nu_torious_lightmode.png",
+          "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/134300/625px_nu_torious_darkmode.png"
+        }
+      }
+    ],
+    "serie_id": 11212,
+    "slug": "voca-vs-nutorious-2026-11-15",
+    "match_type": "best_of",
+    "game_advantage": null
+  }
+]

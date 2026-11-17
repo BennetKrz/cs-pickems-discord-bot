@@ -1,0 +1,157 @@
+{
+  "tournament_id": 22415,
+  "videogame_version": null,
+  "rescheduled": false,
+  "opponents": [],
+  "results": [],
+  "original_scheduled_at": "2026-11-17T15:00:00Z",
+  "winner_type": "Team",
+  "serie": {
+    "id": 11189,
+    "name": "Cluj-Napoca: Closed Qualifier",
+    "year": 2027,
+    "begin_at": "2026-11-15T09:00:00Z",
+    "end_at": "2026-11-17T18:00:00Z",
+    "winner_id": null,
+    "winner_type": "Team",
+    "slug": "cs-go-pgl-cluj-napoca-closed-qualifier-2027",
+    "modified_at": "2026-11-13T12:21:30Z",
+    "league_id": 5365,
+    "season": null,
+    "full_name": "Cluj-Napoca: Closed Qualifier 2027"
+  },
+  "streams_list": [
+    {
+      "main": false,
+      "language": "en",
+      "embed_url": "https://player.kick.com/PGL",
+      "official": false,
+      "raw_url": "https://kick.com/PGL"
+    },
+    {
+      "main": true,
+      "language": "en",
+      "embed_url": "https://player.twitch.tv/?channel=PGL",
+      "official": true,
+      "raw_url": "https://www.twitch.tv/PGL"
+    }
+  ],
+  "end_at": null,
+  "winner_id": null,
+  "videogame_title": {
+    "id": 13,
+    "name": "Counter-Strike 2",
+    "slug": "cs-2",
+    "videogame_id": 3
+  },
+  "serie_id": 11189,
+  "league_id": 5365,
+  "scheduled_at": "2026-11-17T15:00:00Z",
+  "status": "not_started",
+  "begin_at": "2026-11-17T15:00:00Z",
+  "match_type": "best_of",
+  "draw": false,
+  "modified_at": "2026-11-16T22:06:24Z",
+  "league": {
+    "id": 5365,
+    "name": "PGL",
+    "url": null,
+    "slug": "cs-go-pgl",
+    "modified_at": "2025-02-05T15:08:30Z",
+    "image_url": "https://cdn-api.pandascore.co/images/league/image/5365/800px-pgl_allmode-png-png"
+  },
+  "videogame": {
+    "id": 3,
+    "name": "Counter-Strike",
+    "slug": "cs-go"
+  },
+  "forfeit": false,
+  "tournament": {
+    "id": 22415,
+    "name": "Playoffs",
+    "type": "online",
+    "country": null,
+    "begin_at": "2026-11-15T09:00:00Z",
+    "detailed_stats": true,
+    "end_at": "2026-11-17T18:00:00Z",
+    "winner_id": null,
+    "winner_type": "Team",
+    "slug": "cs-go-pgl-cluj-napoca-closed-qualifier-2027-playoffs",
+    "region": "EEU",
+    "serie_id": 11189,
+    "modified_at": "2026-11-15T10:58:09Z",
+    "league_id": 5365,
+    "has_bracket": true,
+    "prizepool": null,
+    "tier": "b",
+    "live_supported": false
+  },
+  "game_advantage": null,
+  "number_of_games": 3,
+  "id": 1796538,
+  "name": "Lower Bracket Final: TBD vs TBD",
+  "detailed_stats": true,
+  "games": [
+    {
+      "complete": false,
+      "id": 239048,
+      "position": 1,
+      "status": "not_started",
+      "length": null,
+      "finished": false,
+      "begin_at": null,
+      "detailed_stats": true,
+      "end_at": null,
+      "forfeit": false,
+      "match_id": 1796538,
+      "winner_type": "Team",
+      "winner": {
+        "id": null,
+        "type": "Team"
+      }
+    },
+    {
+      "complete": false,
+      "id": 239049,
+      "position": 2,
+      "status": "not_started",
+      "length": null,
+      "finished": false,
+      "begin_at": null,
+      "detailed_stats": true,
+      "end_at": null,
+      "forfeit": false,
+      "match_id": 1796538,
+      "winner_type": "Team",
+      "winner": {
+        "id": null,
+        "type": "Team"
+      }
+    },
+    {
+      "complete": false,
+      "id": 239050,
+      "position": 3,
+      "status": "not_started",
+      "length": null,
+      "finished": false,
+      "begin_at": null,
+      "detailed_stats": true,
+      "end_at": null,
+      "forfeit": false,
+      "match_id": 1796538,
+      "winner_type": "Team",
+      "winner": {
+        "id": null,
+        "type": "Team"
+      }
+    }
+  ],
+  "live": {
+    "supported": false,
+    "url": null,
+    "opens_at": null
+  },
+  "winner": null,
+  "slug": "2026-11-17-07c374c0-105e-4e9d-a588-2b9a6f195f61"
+}

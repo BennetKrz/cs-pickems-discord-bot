@@ -1,0 +1,186 @@
+{
+  "tournament_id": 22463,
+  "videogame_version": null,
+  "rescheduled": true,
+  "opponents": [
+    {
+      "type": "Team",
+      "opponent": {
+        "id": 139518,
+        "name": "Axorfy Gaming",
+        "location": "BR",
+        "slug": "axorfy-gaming",
+        "modified_at": "2026-11-14T07:29:19Z",
+        "acronym": null,
+        "image_url": "https://cdn-api.pandascore.co/images/team/image/139518/88px_axorfy_gaming_lightmode.png",
+        "dark_mode_image_url": "https://cdn-api.pandascore.co/dark_images/team/dark_image/139518/703px_axorfy_gaming_darkmode.png"
+      }
+    },
+    {
+      "type": "Team",
+      "opponent": {
+        "id": 139026,
+        "name": "MEIA NOITE",
+        "location": "BR",
+        "slug": "meia-noite",
+        "modified_at": "2026-11-14T07:29:23Z",
+        "acronym": null,
+        "image_url": null,
+        "dark_mode_image_url": null
+      }
+    }
+  ],
+  "results": [
+    {
+      "score": 0,
+      "team_id": 139518
+    },
+    {
+      "score": 0,
+      "team_id": 139026
+    }
+  ],
+  "original_scheduled_at": "2026-11-16T23:45:00Z",
+  "winner_type": "Team",
+  "serie": {
+    "id": 11210,
+    "name": "Challengers #4",
+    "year": 2026,
+    "begin_at": "2026-11-14T21:00:00Z",
+    "end_at": "2026-11-23T02:45:00Z",
+    "winner_id": null,
+    "winner_type": "Team",
+    "slug": "cs-go-champion-of-champions-tour-challengers-4-2026",
+    "modified_at": "2026-11-14T07:18:52Z",
+    "league_id": 4842,
+    "season": null,
+    "full_name": "Challengers #4 2026"
+  },
+  "streams_list": [
+    {
+      "main": true,
+      "language": "en",
+      "embed_url": "https://player.kick.com/cct_cs5",
+      "official": true,
+      "raw_url": "https://kick.com/cct_cs5"
+    }
+  ],
+  "end_at": null,
+  "winner_id": null,
+  "videogame_title": {
+    "id": 13,
+    "name": "Counter-Strike 2",
+    "slug": "cs-2",
+    "videogame_id": 3
+  },
+  "serie_id": 11210,
+  "league_id": 4842,
+  "scheduled_at": "2026-11-17T00:00:00Z",
+  "status": "postponed",
+  "begin_at": "2026-11-17T00:00:00Z",
+  "match_type": "best_of",
+  "draw": false,
+  "modified_at": "2026-11-17T01:22:58Z",
+  "league": {
+    "id": 4842,
+    "name": "CCT South America",
+    "url": "https://cctour.gg/",
+    "slug": "cs-go-champion-of-champions-tour",
+    "modified_at": "2022-08-09T10:12:50Z",
+    "image_url": "https://cdn-api.pandascore.co/images/league/image/4842/600px-cct_south_america_icon_allmode-png"
+  },
+  "videogame": {
+    "id": 3,
+    "name": "Counter-Strike",
+    "slug": "cs-go"
+  },
+  "forfeit": false,
+  "tournament": {
+    "id": 22463,
+    "name": "Playoffs",
+    "type": "online",
+    "country": null,
+    "begin_at": "2026-11-14T21:00:00Z",
+    "detailed_stats": false,
+    "end_at": "2026-11-23T02:45:00Z",
+    "winner_id": null,
+    "winner_type": "Team",
+    "slug": "cs-go-champion-of-champions-tour-challengers-4-2026-playoffs",
+    "region": "SA",
+    "serie_id": 11210,
+    "modified_at": "2026-11-14T09:19:14Z",
+    "league_id": 4842,
+    "has_bracket": true,
+    "prizepool": "2,500 United States Dollar",
+    "tier": "d",
+    "live_supported": false
+  },
+  "game_advantage": null,
+  "number_of_games": 3,
+  "id": 1816565,
+  "name": "Upper Bracket Quarterfinal 1: Axorfy Gaming vs MEIA NOITE",
+  "detailed_stats": false,
+  "games": [
+    {
+      "complete": false,
+      "id": 239659,
+      "position": 1,
+      "status": "not_started",
+      "length": null,
+      "finished": false,
+      "begin_at": null,
+      "detailed_stats": false,
+      "end_at": null,
+      "forfeit": false,
+      "match_id": 1816565,
+      "winner_type": "Team",
+      "winner": {
+        "id": null,
+        "type": "Team"
+      }
+    },
+    {
+      "complete": false,
+      "id": 239660,
+      "position": 2,
+      "status": "not_started",
+      "length": null,
+      "finished": false,
+      "begin_at": null,
+      "detailed_stats": false,
+      "end_at": null,
+      "forfeit": false,
+      "match_id": 1816565,
+      "winner_type": "Team",
+      "winner": {
+        "id": null,
+        "type": "Team"
+      }
+    },
+    {
+      "complete": false,
+      "id": 239661,
+      "position": 3,
+      "status": "not_started",
+      "length": null,
+      "finished": false,
+      "begin_at": null,
+      "detailed_stats": false,
+      "end_at": null,
+      "forfeit": false,
+      "match_id": 1816565,
+      "winner_type": "Team",
+      "winner": {
+        "id": null,
+        "type": "Team"
+      }
+    }
+  ],
+  "live": {
+    "supported": false,
+    "url": null,
+    "opens_at": null
+  },
+  "winner": null,
+  "slug": "axorfy-gaming-vs-meia-noite-2026-11-17"
+}

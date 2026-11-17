@@ -93,7 +93,7 @@ The canonical schema is specified in [T02](tickets/T02-domain-model-database.md)
 
 | Risk | Effect | Mitigation |
 | --- | --- | --- |
-| PandaScore's free plan lacks per-map round scores or live data | Exact map-score picks can't be settled automatically | T04 spike; manual entry (T05); pending-then-void rule (T11); a second adapter later. Liquipedia's API asks for a named User-Agent and has usage terms. HLTV has no official API; scraping it is fragile and likely against its terms. |
+| PandaScore's free plan lacks per-map round scores or live data | Exact map-score picks can't be settled automatically | **Confirmed by the T04 spike ([ADR 0001](adr/0001-pandascore-coverage.md)): no round scores or map names on the free plan.** Manual entry (T05); pending-then-void rule (T11); a second adapter later. Liquipedia's API asks for a named User-Agent and has usage terms. HLTV has no official API; scraping it is fragile and likely against its terms. |
 | Discord Activity APIs change (Entry Point command, launch response, launch parameters) | Launch buttons or deep links break | T08 checks current docs; the pending-view deep link needs no special API. |
 | Public URL for the Pi | The Activity can't load without HTTPS | Own domain, ports 80/443 forwarded, Caddy with automatic certificates; only Caddy is exposed and the host is hardened (T16). DS-Lite or CGNAT connections can't forward IPv4 ports. Use DynDNS if the IP changes. |
 | Unattended updates by Watchtower | A bad release goes live by itself | CI gates, backward-compatible migrations, `IMAGE_TAG` pinning for rollback, backups (P4). |
