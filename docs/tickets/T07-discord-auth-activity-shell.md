@@ -1,7 +1,7 @@
 # T07 – Discord application, authentication and Activity shell
 
 - **Epic:** B – Discord integration
-- **Status:** in review
+- **Status:** done
 - **Index:** [all tickets](README.md)
 
 **Goal:** a member opens the Activity in the server and is signed in with their Discord account automatically.
@@ -22,10 +22,10 @@
 
 **Acceptance criteria**
 
-- [ ] The Activity opens in the test server on desktop and mobile and shows the user's name and avatar.
+- [x] The Activity opens in the test server on desktop and mobile and shows the user's name and avatar.
 - [x] A forged guild ID, a non-member, and an expired session all get 401/403; tests cover each.
 - [x] Admin detection is correct for the owner, a *Manage Server* role, the configured role, and a normal member.
-- [ ] No CSP errors in the Activity console.
+- [x] No CSP errors in the Activity console.
 
 **Notes**
 
@@ -45,7 +45,9 @@
   - `etag.rs`, `domain::admin`, `store` session repository and constraints.
   - Frontend: `discord.test.ts` (SDK call order and arguments), `auth.test.tsx` (outside a server, errors, re-sign-in on 401), `poll.test.tsx` (ETag, 20/60 s, pause while hidden), `shell/Shell.test.tsx`.
 - Checked locally with a dev build and `pnpm dev` in headless Chrome at 360 px and 1100 px: sign-in, tabs, the avatar through the proxy, 304s, and "Open this from the server" for the production build outside Discord.
-- Still open: the first and the last criterion need a run inside Discord (desktop and mobile, console without CSP errors). That needs a real Discord application, which this environment does not have.
+- Checked inside Discord by the owner on 18 Nov 2026, with a development app and a cloudflared quick tunnel:
+  - the desktop client and the mobile app open the Activity and show the name and avatar;
+  - the console of the Discord web client (Firefox, production build) has no CSP errors from the Activity. The only CSP messages come from discord.com itself (one blocked script injected by a browser extension), plus harmless rejections of the tunnel's `__cf_bm` cookie.
 - Follow-ups:
   - T08: `/admin role set` writes `guild_settings.admin_role_id`; bot admin checks can reuse `domain::admin` with interaction data. The deep link (pending view) goes into the shell's memory router.
   - T12–T15: replace the placeholder tabs in `frontend/src/routes/tabs.tsx`; use `usePoll` with `POLL_LIVE_MS` or `POLL_IDLE_MS`, and `api::img::team_logo_url` for logos.
