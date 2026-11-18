@@ -39,14 +39,14 @@ Without Nix, install:
 cp .env.example .env
 ```
 
-The placeholder Discord values are fine for now, because the bot does not connect to Discord until T08. `cargo run` finds `.env` by walking up from `backend/`. Real environment variables always win over `.env`.
+The placeholder Discord values are fine for working in a normal browser with a dev build (see [Signing in without Discord](#signing-in-without-discord)). Signing in inside Discord needs a real application: see [docs/discord-setup.md](docs/discord-setup.md). `cargo run` finds `.env` by walking up from `backend/`. Real environment variables always win over `.env`.
 
 | Variable | Required | Default | Notes |
 | --- | --- | --- | --- |
 | `DISCORD_CLIENT_ID` | yes | – | numeric application ID |
 | `DISCORD_CLIENT_SECRET` | yes | – | secret, env only |
 | `DISCORD_BOT_TOKEN` | yes | – | secret, env only |
-| `DISCORD_GUILD_ID` | no | – | when set, only this server is accepted |
+| `DISCORD_GUILD_ID` | no | – | when set, only this server is accepted (recommended) |
 | `DATABASE_URL` | yes | – | `sqlite://path/to/file.db`; file and directory are created |
 | `PANDASCORE_TOKEN` | if `pandascore` is enabled | – | secret, env only |
 | `ENABLED_SOURCES` | no | `pandascore` | comma-separated: `pandascore`, `manual`, `fixture` (`fixture` only in dev builds, see below) |
@@ -54,6 +54,7 @@ The placeholder Discord values are fine for now, because the bot does not connec
 | `RUST_LOG` | no | `info` | [`tracing` filter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) |
 | `BIND_ADDR` | no | `0.0.0.0:8080` | |
 | `STATIC_DIR` | no | `../frontend/dist` | built frontend |
+| `IMAGE_CACHE_DIR` | no | `data/img-cache` | disk cache of the image proxy for avatars and team logos (T07) |
 | `BUDGET__<SOURCE>__PER_HOUR` / `__PER_MINUTE` | no | PandaScore 500 / 30 | request budget for the sync worker (T06) |
 | `SYNC__<KEY>` | no | see below | sync cadences such as `SYNC__LIVE_EVERY=2m` (T06) |
 | `CONFIG_FILE` | no | `./config.toml` if present | optional TOML file |
@@ -128,10 +129,30 @@ curl -X PUT localhost:8080/api/admin/matches/1/overrides/series \
      -d '{"score": [2, 1]}'
 ```
 
+#### Signing in without Discord
+
+The Activity normally signs in through Discord, which only works inside the Discord client. For a normal browser, dev builds offer a dev sign-in: `POST /api/dev/session {"user_id": "…"}` creates a real session for any Discord user ID, without Discord. `pnpm dev` uses it automatically when the page is not inside Discord, as the user in `VITE_DEV_USER_ID` (default `200000000000000001`):
+
+```sh
+cd backend && ENABLED_SOURCES=fixture cargo run --features dev
+cd frontend && VITE_DEV_USER_ID=300000000000000001 pnpm dev   # open http://localhost:5173
+```
+
+API calls by hand need the session as a bearer token:
+
+```sh
+TOKEN=$(curl -s -X POST localhost:8080/api/dev/session \
+     -H 'content-type: application/json' -d '{"user_id": "300000000000000001"}' | sed -E 's/.*"session_token":"([0-9a-f]+)".*/\1/')
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/me
+```
+
+Admin status in `/api/me` comes from Discord, so with placeholder credentials it is `false` (the log says once that Discord rejected the bot token). Admin routes still take `X-Dev-User`.
+
 Production builds (no `dev` feature) contain none of this:
 - `/api/dev/*` is a 404;
-- admin requests are denied until T07 adds Discord sessions;
-- `ENABLED_SOURCES=fixture` stops the app at startup.
+- admin requests need a Discord session of a server admin (T07); `X-Dev-User` is ignored;
+- `ENABLED_SOURCES=fixture` stops the app at startup;
+- outside Discord, the Activity only says "Open this from the server".
 
 To lint and test the dev wiring too, run `cargo clippy --all-targets --features app/dev -- -D warnings && cargo test --features app/dev`.
 
@@ -141,7 +162,7 @@ To lint and test the dev wiring too, run `cargo clippy --all-targets --features 
 
 Activities load through Discord's proxy, so the dev server needs a public HTTPS URL. Following [Discord's local-development guide](https://docs.discord.com/developers/activities/development-guides/local-development):
 
-1. Create a separate **development** application in the Discord Developer Portal and enable Activities.
+1. Create a separate **development** application as described in [docs/discord-setup.md](docs/discord-setup.md), install it to your test server, and put its client ID, client secret and bot token into `.env`. Sign-in checks your membership with the bot token, so the bot must be in the server.
 2. Run the backend (`cargo run`) and the frontend in tunnel mode:
 
    ```sh
@@ -151,7 +172,7 @@ Activities load through Discord's proxy, so the dev server needs a public HTTPS 
 
    This is a cloudflared *quick tunnel*: dev only, no account needed. It prints a host such as `https://funky-jogging-bunny.trycloudflare.com`.
 3. In the Developer Portal, go to **Activities → URL Mappings** and set `/` to that host, without `https://`.
-4. Launch the Activity from the Discord client with **Application URL Override disabled**.
+4. Launch the Activity from the Discord client with **Application URL Override disabled**. It signs you in with your Discord account and shows your name and avatar. To look for CSP errors, open the Activity in the Discord web client (discord.com/app) and check the browser's developer console.
 
 The quick-tunnel host changes each time you start cloudflared, so update the mapping each time. A stable alternative is a dev subdomain on your own domain that points at your machine.
 

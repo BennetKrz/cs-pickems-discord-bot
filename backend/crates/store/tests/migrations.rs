@@ -4,7 +4,7 @@ mod common;
 
 use common::{at, team, test_db};
 
-const TABLES: [&str; 19] = [
+const TABLES: [&str; 20] = [
     "audit_log",
     "events",
     "external_refs",
@@ -18,6 +18,7 @@ const TABLES: [&str; 19] = [
     "pick_results",
     "pick_revisions",
     "picks",
+    "sessions",
     "source_records",
     "stages",
     "sync_state",
@@ -76,7 +77,7 @@ async fn migrations_are_idempotent_on_restart() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(applied, 3, "0001 to 0003");
+    assert_eq!(applied, 4, "0001 to 0004");
     let kept = store::teams::get(&pool, id).await.unwrap().unwrap();
     assert_eq!(kept.name, "Alpha");
     pool.close().await;

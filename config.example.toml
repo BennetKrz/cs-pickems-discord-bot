@@ -13,6 +13,7 @@
 # rust_log = "info"
 # bind_addr = "0.0.0.0:8080"
 # static_dir = "../frontend/dist"
+# image_cache_dir = "data/img-cache"   # image proxy cache (T07)
 
 # Request budget per source, enforced by the sync scheduler (T06).
 # Default: 50% of PandaScore's free plan (1,000/h, 60/min).

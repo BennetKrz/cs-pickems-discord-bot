@@ -18,6 +18,9 @@ use serde::Deserialize;
 /// Default config file, relative to the working directory. Optional.
 pub const DEFAULT_CONFIG_FILE: &str = "config.toml";
 
+/// Default image cache of the proxy, relative to the working directory.
+pub const DEFAULT_IMAGE_CACHE_DIR: &str = "data/img-cache";
+
 const SECRET_KEYS: [&str; 3] = [
     "DISCORD_CLIENT_SECRET",
     "DISCORD_BOT_TOKEN",
@@ -107,6 +110,8 @@ pub struct Config {
     pub bind_addr: SocketAddr,
     /// Directory with the built frontend (`pnpm build` output).
     pub static_dir: PathBuf,
+    /// Disk cache of the image proxy (T07): avatars and team logos.
+    pub image_cache_dir: PathBuf,
     /// Request budget per source. Sources without an entry are unbudgeted
     /// (they make no external calls).
     pub budgets: BTreeMap<SourceId, Budget>,
@@ -178,6 +183,7 @@ struct FileConfig {
     rust_log: Option<String>,
     bind_addr: Option<String>,
     static_dir: Option<String>,
+    image_cache_dir: Option<String>,
     primary_source: Option<String>,
     #[serde(default)]
     budget: BTreeMap<String, FileBudget>,
@@ -362,6 +368,11 @@ pub fn from_sources(
             .or_else(|| non_empty(file.static_dir))
             .unwrap_or_else(|| "../frontend/dist".to_owned()),
     );
+    let image_cache_dir = PathBuf::from(
+        env_get("IMAGE_CACHE_DIR")
+            .or_else(|| non_empty(file.image_cache_dir))
+            .unwrap_or_else(|| DEFAULT_IMAGE_CACHE_DIR.to_owned()),
+    );
 
     let budgets = budgets(env, file.budget, &mut err);
 
@@ -399,6 +410,7 @@ pub fn from_sources(
         log_filter,
         bind_addr,
         static_dir,
+        image_cache_dir,
         budgets,
         primary_source,
         precedence,
@@ -759,6 +771,7 @@ mod tests {
         assert_eq!(c.log_filter, "info");
         assert_eq!(c.bind_addr, "0.0.0.0:8080".parse().unwrap());
         assert_eq!(c.static_dir, PathBuf::from("../frontend/dist"));
+        assert_eq!(c.image_cache_dir, PathBuf::from("data/img-cache"));
         assert_eq!(
             c.budgets[&SourceId::Pandascore],
             Budget {
@@ -851,6 +864,7 @@ mod tests {
             bind_addr = "127.0.0.1:9000"
             enabled_sources = ["pandascore", "manual"]
             static_dir = "/srv/dist"
+            image_cache_dir = "/data/img-cache"
 
             [budget.pandascore]
             per_hour = 400
@@ -868,6 +882,10 @@ mod tests {
             vec![SourceId::Pandascore, SourceId::Manual]
         );
         assert_eq!(c.static_dir, PathBuf::from("/srv/dist"));
+        assert_eq!(c.image_cache_dir, PathBuf::from("/data/img-cache"));
+        e.insert("IMAGE_CACHE_DIR".into(), "/tmp/img".into());
+        let c = from_sources(&e, with_file(file)).unwrap();
+        assert_eq!(c.image_cache_dir, PathBuf::from("/tmp/img"), "env wins");
         assert_eq!(
             c.budgets[&SourceId::Pandascore],
             Budget {

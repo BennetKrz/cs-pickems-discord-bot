@@ -446,6 +446,22 @@ async fn row_level_checks() {
         "INSERT INTO source_records (source, entity_type, external_id, payload, payload_hash, \
            fetched_at) VALUES ('fixture', 'match', '1', 'nope', 'h', '2026-11-20T12:00:00.000Z')"
             .to_owned(),
+        // Session token hashes are 64 lowercase hex digits; sessions end after
+        // they start.
+        format!(
+            "INSERT INTO sessions (token_hash, user_id, guild_id, created_at, expires_at) \
+             VALUES ('abc', '{ALICE}', '{GUILD}', '2026-11-20T12:00:00.000Z', '2026-11-27T12:00:00.000Z')"
+        ),
+        format!(
+            "INSERT INTO sessions (token_hash, user_id, guild_id, created_at, expires_at) \
+             VALUES ('{}', '{ALICE}', '{GUILD}', '2026-11-20T12:00:00.000Z', '2026-11-27T12:00:00.000Z')",
+            "A".repeat(64)
+        ),
+        format!(
+            "INSERT INTO sessions (token_hash, user_id, guild_id, created_at, expires_at) \
+             VALUES ('{}', '{ALICE}', '{GUILD}', '2026-11-20T12:00:00.000Z', '2026-11-20T12:00:00.000Z')",
+            "a".repeat(64)
+        ),
     ];
     for sql in cases {
         let res = exec(&db.pool, sql.clone()).await;
@@ -509,6 +525,11 @@ async fn foreign_keys_are_enforced() {
         "INSERT INTO pick_revisions (pick_id, snapshot, edited_at) \
          VALUES (999, '{}', '2026-11-20T12:00:00.000Z')"
             .to_owned(),
+        format!(
+            "INSERT INTO sessions (token_hash, user_id, guild_id, created_at, expires_at) \
+             VALUES ('{}', '999', '{GUILD}', '2026-11-20T12:00:00.000Z', '2026-11-27T12:00:00.000Z')",
+            "a".repeat(64)
+        ),
     ];
     for sql in cases {
         assert_rejected(exec(&db.pool, sql).await, "FOREIGN KEY constraint failed");

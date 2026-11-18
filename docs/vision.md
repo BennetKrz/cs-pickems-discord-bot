@@ -63,3 +63,4 @@ Defaults apply until the owner decides otherwise.
 - [ ] SQLite (default) or PostgreSQL?
 - [ ] Are the default points in T11 fine?
 - [ ] Will the GitHub repo be public or private? This affects free arm64 runners and GHCR pull auth.
+- [ ] How many members does the server have? Discord shows an unverified Activity only to the app's team and up to 50 app testers, and only in servers with fewer than 25 members (see [discord-setup.md](discord-setup.md#who-can-launch-it)). A larger server needs the Activity made available through Discord's app verification.
