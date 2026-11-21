@@ -24,6 +24,108 @@ export interface SessionResponse {
   me: Me
 }
 
+// ---- picks (T10) ------------------------------------------------------------
+// Scores are relative to the match's team A/B. Team IDs are internal IDs.
+
+export interface Score {
+  a: number
+  b: number
+}
+
+export interface MapPickParts {
+  /** 1…N for a BoN. */
+  map_number: number
+  winner_team_id: number
+  /** Exact regulation score: 13:0 to 13:11 for either side. */
+  rounds?: Score | null
+  /** The winner wins in overtime; excludes `rounds`. */
+  overtime?: boolean
+}
+
+/**
+ * The three parts of a pick, every one optional. `PUT` replaces the whole
+ * pick: a part left out is removed, and a pick without parts is deleted.
+ */
+export interface PickParts {
+  winner_team_id?: number | null
+  /** Bo3/Bo5 only; sets the winner. */
+  series?: Score | null
+  maps?: MapPickParts[]
+}
+
+/** A pick as the API returns it: every part present, maps sorted. */
+export interface SavedPickParts {
+  winner_team_id: number | null
+  series: Score | null
+  maps: Required<MapPickParts>[]
+}
+
+/** The caller's pick: answer of `PUT …/pick`, entries of `GET /api/me/picks`. */
+export interface MyPick extends SavedPickParts {
+  match_id: number
+  created_at: string
+  /** Time of the last change. */
+  updated_at: string
+  /** Saved more than once. */
+  edited: boolean
+}
+
+/** One member's pick, as everyone sees it. */
+export interface PickView extends SavedPickParts {
+  user_id: string
+  display_name: string
+  avatar_url: string
+  created_at: string
+  updated_at: string
+  edited: boolean
+}
+
+/** Picks split between team A and team B; percentages add up to 100. */
+export interface Split {
+  a: number
+  b: number
+  pct_a: number
+  pct_b: number
+}
+
+export interface PickStats {
+  total: number
+  winner: Split
+  /** Every allowed series score of the format, also unpicked ones; empty for Bo1. */
+  series: (Score & { count: number; pct: number })[]
+  /** One entry per map number 1…N. */
+  maps: (Split & { map_number: number })[]
+}
+
+/** Answer of `GET /api/matches/{id}/picks`. */
+export interface MatchPicks {
+  match_id: number
+  /** The caller may create, edit or delete their pick now. */
+  pickable: boolean
+  /** Picks are read-only: hide the edit controls. */
+  locked: boolean
+  lock_at: string | null
+  picks: PickView[]
+  stats: PickStats
+}
+
+export interface MyPicks {
+  picks: MyPick[]
+}
+
+/** Path of every pick of a match, for `usePoll`. */
+export function matchPicksPath(matchId: number): string {
+  return `/api/matches/${matchId}/picks`
+}
+
+/** Path of the caller's picks, for `usePoll`. */
+export const MY_PICKS_PATH = '/api/me/picks'
+
+/** Error codes of the pick API. */
+export const PICK_LOCKED = 'pick_locked'
+export const NOT_PICKABLE = 'not_pickable'
+export const INVALID_PICK = 'invalid_pick'
+
 /** A failed API call: HTTP status plus the `error` code of the JSON body. */
 export class ApiError extends Error {
   readonly status: number
@@ -108,5 +210,36 @@ export class ApiClient {
       throw err
     }
     return { notModified: false, data: (await res.json()) as T, etag: res.headers.get('ETag') }
+  }
+
+  /** A write with the session; resolves to the JSON body, or `null` for 204. */
+  private async send<T>(method: 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T | null> {
+    const headers: Record<string, string> = { Authorization: `Bearer ${this.token}` }
+    const init: RequestInit = { method, headers, cache: 'no-store' }
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json'
+      init.body = JSON.stringify(body)
+    }
+    const res = await fetch(path, init)
+    if (!res.ok) {
+      const err = await toApiError(res)
+      if (res.status === 401) this.onUnauthorized()
+      throw err
+    }
+    return res.status === 204 ? null : ((await res.json()) as T)
+  }
+
+  /**
+   * Creates or replaces the caller's pick. Resolves to the saved pick, or
+   * `null` if `parts` was empty and the pick got deleted. Throws an
+   * `ApiError` with `PICK_LOCKED`, `NOT_PICKABLE` or `INVALID_PICK`.
+   */
+  putPick(matchId: number, parts: PickParts): Promise<MyPick | null> {
+    return this.send<MyPick>('PUT', `/api/matches/${matchId}/pick`, parts)
+  }
+
+  /** Deletes the caller's pick (no error if there is none). */
+  async deletePick(matchId: number): Promise<void> {
+    await this.send('DELETE', `/api/matches/${matchId}/pick`)
   }
 }

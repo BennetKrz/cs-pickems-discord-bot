@@ -1,7 +1,8 @@
 //! Picks, their map parts, edit history and settled results.
 //!
-//! Validation against the pick rules (formats, lock) is the caller's job
-//! (T10); the schema only guards the structural invariants.
+//! Validation against the pick rules (`domain::picks`: formats, lock) is the
+//! caller's job (T10, `api::picks`); the schema only guards the structural
+//! invariants.
 
 use std::collections::HashMap;
 
@@ -213,16 +214,21 @@ where
     Ok(pick)
 }
 
-/// Every pick of a guild for a match, with map parts, oldest first.
-pub async fn list_for_match<'a, A>(
-    conn: A,
+/// Distributes map parts (sorted by pick and map number) to their picks.
+fn attach_maps(picks: &mut [Pick], maps: Vec<(PickId, MapPick)>) {
+    let index: HashMap<PickId, usize> = picks.iter().enumerate().map(|(i, p)| (p.id, i)).collect();
+    for (pick_id, m) in maps {
+        if let Some(&i) = index.get(&pick_id) {
+            picks[i].parts.maps.push(m);
+        }
+    }
+}
+
+async fn list_for_match_in(
+    conn: &mut SqliteConnection,
     guild_id: &str,
     match_id: MatchId,
-) -> DbResult<Vec<Pick>>
-where
-    A: Acquire<'a, Database = Sqlite>,
-{
-    let mut tx = conn.begin().await?;
+) -> DbResult<Vec<Pick>> {
     let mut picks: Vec<Pick> = sqlx::query(concat!(
         "SELECT ",
         pick_columns!(),
@@ -231,7 +237,7 @@ where
     .bind(guild_id)
     .bind(match_id.0)
     .try_map(pick_from_row)
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut *conn)
     .await?;
 
     let maps = sqlx::query(
@@ -243,17 +249,155 @@ where
     .bind(guild_id)
     .bind(match_id.0)
     .try_map(map_pick_from_row)
+    .fetch_all(&mut *conn)
+    .await?;
+    attach_maps(&mut picks, maps);
+    Ok(picks)
+}
+
+/// Every pick of a guild for a match, with map parts, oldest first.
+pub async fn list_for_match<'a, A>(
+    conn: A,
+    guild_id: &str,
+    match_id: MatchId,
+) -> DbResult<Vec<Pick>>
+where
+    A: Acquire<'a, Database = Sqlite>,
+{
+    let mut tx = conn.begin().await?;
+    let picks = list_for_match_in(&mut tx, guild_id, match_id).await?;
+    tx.commit().await?;
+    Ok(picks)
+}
+
+/// The Discord names of a pick's author, for display (T10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PickAuthor {
+    pub username: String,
+    pub global_name: Option<String>,
+    /// Server nickname; `None` if unset or if the member row is missing.
+    pub nick: Option<String>,
+    pub avatar_hash: Option<String>,
+}
+
+/// A pick with its author's names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthoredPick {
+    pub pick: Pick,
+    pub author: PickAuthor,
+    /// Number of saves (rows in `pick_revisions`); more than one means the
+    /// pick was edited.
+    pub revisions: i64,
+}
+
+/// Like [`list_for_match`], with each author's user and member names.
+pub async fn list_for_match_with_authors<'a, A>(
+    conn: A,
+    guild_id: &str,
+    match_id: MatchId,
+) -> DbResult<Vec<AuthoredPick>>
+where
+    A: Acquire<'a, Database = Sqlite>,
+{
+    let mut tx = conn.begin().await?;
+    let picks = list_for_match_in(&mut tx, guild_id, match_id).await?;
+    let mut authors: HashMap<String, (PickAuthor, i64)> = sqlx::query(
+        "SELECT p.user_id, u.username, u.global_name, u.avatar_hash, gm.nick, \
+           (SELECT COUNT(*) FROM pick_revisions r WHERE r.pick_id = p.id) AS revisions \
+         FROM picks p JOIN users u ON u.discord_user_id = p.user_id \
+         LEFT JOIN guild_members gm ON gm.guild_id = p.guild_id AND gm.user_id = p.user_id \
+         WHERE p.guild_id = ? AND p.match_id = ?",
+    )
+    .bind(guild_id)
+    .bind(match_id.0)
+    .try_map(|row: SqliteRow| {
+        Ok((
+            row.try_get::<String, _>("user_id")?,
+            (
+                PickAuthor {
+                    username: row.try_get("username")?,
+                    global_name: row.try_get("global_name")?,
+                    nick: row.try_get("nick")?,
+                    avatar_hash: row.try_get("avatar_hash")?,
+                },
+                row.try_get("revisions")?,
+            ),
+        ))
+    })
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .collect();
+    tx.commit().await?;
+
+    picks
+        .into_iter()
+        .map(|pick| {
+            // `picks.user_id` references `users`, so the author exists.
+            let (author, revisions) = authors
+                .remove(&pick.user_id)
+                .ok_or(sqlx::Error::RowNotFound)?;
+            Ok(AuthoredPick {
+                pick,
+                author,
+                revisions,
+            })
+        })
+        .collect()
+}
+
+/// A member's picks in a guild, with map parts and the number of saves
+/// (see [`AuthoredPick::revisions`]); the latest match first (unscheduled
+/// matches last).
+pub async fn list_for_user<'a, A>(
+    conn: A,
+    guild_id: &str,
+    user_id: &str,
+) -> DbResult<Vec<(Pick, i64)>>
+where
+    A: Acquire<'a, Database = Sqlite>,
+{
+    let mut tx = conn.begin().await?;
+    let (mut picks, revisions): (Vec<Pick>, Vec<i64>) = sqlx::query(
+        "SELECT p.id, p.guild_id, p.user_id, p.match_id, p.winner_team_id, p.series_a, \
+           p.series_b, p.created_at, p.updated_at, \
+           (SELECT COUNT(*) FROM pick_revisions r WHERE r.pick_id = p.id) AS revisions \
+         FROM picks p JOIN matches m ON m.id = p.match_id \
+         WHERE p.guild_id = ? AND p.user_id = ? \
+         ORDER BY m.scheduled_at IS NULL, m.scheduled_at DESC, p.id DESC",
+    )
+    .bind(guild_id)
+    .bind(user_id)
+    .try_map(|row: SqliteRow| {
+        let revisions: i64 = row.try_get("revisions")?;
+        Ok((pick_from_row(row)?, revisions))
+    })
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .unzip();
+    let maps = sqlx::query(
+        "SELECT pm.pick_id, pm.map_number, pm.winner_team_id, pm.rounds_a, pm.rounds_b, \
+           pm.overtime \
+         FROM pick_maps pm JOIN picks p ON p.id = pm.pick_id \
+         WHERE p.guild_id = ? AND p.user_id = ? ORDER BY pm.pick_id, pm.map_number",
+    )
+    .bind(guild_id)
+    .bind(user_id)
+    .try_map(map_pick_from_row)
     .fetch_all(&mut *tx)
     .await?;
     tx.commit().await?;
+    attach_maps(&mut picks, maps);
+    Ok(picks.into_iter().zip(revisions).collect())
+}
 
-    let index: HashMap<PickId, usize> = picks.iter().enumerate().map(|(i, p)| (p.id, i)).collect();
-    for (pick_id, m) in maps {
-        if let Some(&i) = index.get(&pick_id) {
-            picks[i].parts.maps.push(m);
-        }
-    }
-    Ok(picks)
+/// Number of saves of a pick (rows in `pick_revisions`).
+pub async fn count_revisions(ex: impl SqliteExecutor<'_>, pick_id: PickId) -> DbResult<i64> {
+    sqlx::query_scalar("SELECT COUNT(*) FROM pick_revisions WHERE pick_id = ?")
+        .bind(pick_id.0)
+        .fetch_one(ex)
+        .await
 }
 
 /// Deletes a member's pick with its map parts, revisions and result.
@@ -290,6 +434,37 @@ pub async fn list_revisions(
             snapshot: row.try_get::<Json<Value>, _>("snapshot")?.0,
             edited_at: row.try_get("edited_at")?,
         })
+    })
+    .fetch_all(ex)
+    .await
+}
+
+/// The edit history of every pick of a guild for a match, as
+/// `(user_id, revision)`: picks oldest first, each pick's revisions oldest
+/// first.
+pub async fn list_revisions_for_match(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    match_id: MatchId,
+) -> DbResult<Vec<(String, PickRevision)>> {
+    sqlx::query(
+        "SELECT p.user_id, r.id, r.pick_id, r.snapshot, r.edited_at \
+         FROM pick_revisions r JOIN picks p ON p.id = r.pick_id \
+         WHERE p.guild_id = ? AND p.match_id = ? \
+         ORDER BY p.created_at, p.id, r.id",
+    )
+    .bind(guild_id)
+    .bind(match_id.0)
+    .try_map(|row: SqliteRow| {
+        Ok((
+            row.try_get("user_id")?,
+            PickRevision {
+                id: row.try_get("id")?,
+                pick_id: PickId(row.try_get("pick_id")?),
+                snapshot: row.try_get::<Json<Value>, _>("snapshot")?.0,
+                edited_at: row.try_get("edited_at")?,
+            },
+        ))
     })
     .fetch_all(ex)
     .await

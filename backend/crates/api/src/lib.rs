@@ -4,10 +4,12 @@
 //! - `GET /healthz` – liveness and DB check, no auth.
 //! - `/api/auth/*` – sign-in through the Activity (T07), see [`auth`].
 //! - `GET /api/me` – the signed-in member (T07), see [`me`].
+//! - `PUT|DELETE /api/matches/{id}/pick`, `GET /api/matches/{id}/picks`,
+//!   `GET /api/me/picks` – picks (T10), see [`picks`].
 //! - `/api/img/*` – avatars and team logos through the image proxy (T07),
 //!   see [`img`]. No session needed.
-//! - `/api/admin/*` – admin actions on match data (T05) and the sync
-//!   status and resync (T06), see [`admin`].
+//! - `/api/admin/*` – admin actions on match data (T05), the sync status
+//!   and resync (T06), and pick revision history (T10), see [`admin`].
 //! - `/api/dev/*` – dev builds only (feature `dev`): dev sign-in (T07) and
 //!   the fixture clock (T05).
 //! - `/api/*` – unknown paths answer a JSON 404. Every JSON `GET` gets an
@@ -27,6 +29,7 @@ pub mod error;
 pub mod etag;
 pub mod img;
 pub mod me;
+pub mod picks;
 pub mod ratelimit;
 
 use std::fmt::Write as _;
@@ -147,6 +150,7 @@ pub fn router_with(state: AppState, static_dir: &Path, extra: Router<AppState>) 
     let api = Router::new()
         .nest("/auth", ratelimit::limit(auth::routes(), ratelimit::AUTH))
         .merge(me::routes())
+        .merge(picks::routes())
         .nest("/img", img::routes())
         .nest(
             "/admin",
