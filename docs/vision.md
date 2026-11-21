@@ -62,5 +62,5 @@ Defaults apply until the owner decides otherwise.
 - [ ] Is the home connection reachable on IPv4 ports 80/443 (no DS-Lite or CGNAT)? Does the IP change, so that DynDNS is needed?
 - [ ] SQLite (default) or PostgreSQL?
 - [ ] Are the default points in T11 fine?
-- [ ] Will the GitHub repo be public or private? This affects free arm64 runners and GHCR pull auth.
+- [x] Will the GitHub repo be public or private? This affects free arm64 runners and GHCR pull auth. **Private, and the GHCR package too:** the Pi pulls with a read-only token, and arm64 is cross-compiled on an amd64 runner (T17, [ADR 0009](adr/0009-ci-cd-and-watchtower.md)).
 - [ ] How many members does the server have? Discord shows an unverified Activity only to the app's team and up to 50 app testers, and only in servers with fewer than 25 members (see [discord-setup.md](discord-setup.md#who-can-launch-it)). A larger server needs the Activity made available through Discord's app verification.

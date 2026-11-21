@@ -9,10 +9,15 @@
 # C code in aws-lc-rs and the bundled SQLite), and the final stage only copies
 # files, so building an arm64 image on amd64 needs no QEMU emulation.
 # See docs/adr/0008-container-image-and-proxy.md.
+#
+# The Rust dependencies are compiled in their own layer (cargo-chef), so a
+# layer cache (CI: buildx `type=gha`, T17) skips them until Cargo.toml or
+# Cargo.lock change. See docs/adr/0009-ci-cd-and-watchtower.md.
 
 ARG NODE_IMAGE=node:22-slim
 ARG RUST_IMAGE=rust:1-slim-trixie
 ARG RUNTIME_IMAGE=gcr.io/distroless/cc-debian13:nonroot
+ARG CARGO_CHEF_VERSION=0.1.78
 
 # ---- frontend: pnpm build → /src/frontend/dist ---------------------------------
 FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS frontend
@@ -26,8 +31,21 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
 COPY frontend/ ./
 RUN pnpm build
 
+# ---- chef: cargo-chef on the build machine, shared by all targets -------------
+FROM --platform=$BUILDPLATFORM ${RUST_IMAGE} AS chef
+ARG CARGO_CHEF_VERSION
+ENV CARGO_TERM_COLOR=never
+RUN cargo install cargo-chef --locked --version "${CARGO_CHEF_VERSION}" && \
+    rm -rf /usr/local/cargo/registry
+WORKDIR /src/backend
+
+# ---- planner: the dependency recipe (changes only with manifests/lockfile) ----
+FROM chef AS planner
+COPY backend/ ./
+RUN cargo chef prepare --recipe-path recipe.json
+
 # ---- backend: cargo build --release for $TARGETARCH → /out/app ---------------
-FROM --platform=$BUILDPLATFORM ${RUST_IMAGE} AS backend
+FROM chef AS backend
 ARG BUILDARCH
 ARG TARGETARCH
 RUN set -eux; \
@@ -50,17 +68,17 @@ ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar \
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
     CC_x86_64_unknown_linux_gnu=x86_64-linux-gnu-gcc \
-    AR_x86_64_unknown_linux_gnu=x86_64-linux-gnu-ar \
-    CARGO_TERM_COLOR=never
-WORKDIR /src/backend
+    AR_x86_64_unknown_linux_gnu=x86_64-linux-gnu-ar
+# Dependencies only: this layer stays cached while the recipe is unchanged.
+# No cache mounts here: BuildKit never exports them, so CI couldn't reuse them.
+COPY --from=planner /src/backend/recipe.json recipe.json
+RUN cargo chef cook --release --locked --target "$(cat /rust-target)" -p app --recipe-path recipe.json
 COPY backend/ ./
 # `.git` is not in the build context; build.rs reads GIT_SHA for /healthz.
 ARG GIT_SHA=
 ENV GIT_SHA=${GIT_SHA}
 # Production build: no `dev` feature (no fixture source, no /api/dev/*).
-RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=cargo-target-${TARGETARCH},target=/src/backend/target \
-    set -eux; \
+RUN set -eux; \
     target="$(cat /rust-target)"; \
     cargo build --release --locked --target "$target" -p app; \
     mkdir -p /out/data; \

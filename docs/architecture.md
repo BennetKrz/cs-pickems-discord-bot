@@ -87,9 +87,9 @@ The canonical schema is specified in [T02](tickets/T02-domain-model-database.md)
   - the reverse proxy, either:
     - `caddy` (compose profile `caddy`, the default), publishing 80/443 with automatic Let's Encrypt certificates; or
     - an **existing Traefik** outside this stack: `docker-compose.traefik.yml` attaches `app` to Traefik's network, and the route comes from `docker-compose.traefik-labels.yml` (Docker labels) or `traefik/pickem.yml` (Traefik's file provider);
-  - `watchtower`, updating only the labeled `app` container (T17).
+  - `watchtower`, updating only the `app` container: label-enable mode plus the scope `cs2-pickem`, so the proxy and other stacks are never touched (T17, [ADR 0009](adr/0009-ci-cd-and-watchtower.md)).
 - The Discord Activity URL mapping `/` points to the owner's domain. Discord's proxy forwards Activity requests to the reverse proxy, which forwards them to `app:8080`.
-- Images are built in GitHub Actions for arm64 (cross-compiled, not under QEMU) and pushed to GHCR. Watchtower polls the configured tag.
+- Images are built in GitHub Actions for arm64 and amd64 (cross-compiled on one amd64 runner, not under QEMU) after the gates pass, and pushed to GHCR as `latest`, `sha-<short>`, and `vX.Y.Z` plus `stable` on releases. Watchtower polls the tag set in `IMAGE_TAG` every 5 min.
 
 ## Risks
 
