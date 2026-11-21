@@ -1,7 +1,7 @@
 # Bundled reverse proxy (compose profile `caddy`). Caddy gets and renews a
 # Let's Encrypt certificate for $DOMAIN by itself; ports 80 and 443 must be
 # reachable from the Internet. Keep the headers in sync with
-# docker-compose.traefik.yml and traefik/pickem.yml.
+# docker-compose.traefik-labels.yml and traefik/pickem.yml.
 
 {$DOMAIN} {
 	header {

@@ -26,8 +26,10 @@ Facts that shaped the details (checked 18 Nov 2026):
 2. **`app healthcheck`** probes `GET /healthz` on `BIND_ADDR` (a wildcard address becomes loopback) over a plain `TcpStream`, before any config is loaded. It needs no curl, no shell and no secrets, and adds no dependencies.
 3. **The reverse proxy is a choice in `deploy/.env`.**
    - `caddy` is in the compose profile `caddy`. The example `.env` sets `COMPOSE_PROFILES=caddy`, so `docker compose up -d` works out of the box.
-   - For Traefik: `COMPOSE_PROFILES=` plus `COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml`. The override attaches `app` to Traefik's external network with router, middleware and service labels.
-   - `deploy/traefik/pickem.yml` is the same router for Traefik's file provider. It reaches the container by its fixed name `pickem-app`.
+   - For Traefik: `COMPOSE_PROFILES=` plus `COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml`. That override only attaches `app` to Traefik's external network.
+   - The route is a separate choice, so a Traefik that also watches Docker never gets a second, label-made router next to a hand-written one:
+     - `docker-compose.traefik-labels.yml` (appended to `COMPOSE_FILE`) adds the router, middleware and service labels for the Docker provider;
+     - or `deploy/traefik/pickem.yml` is the same router for the owner's own Traefik config (file provider). It reaches the container by its fixed name `pickem-app`.
    - `app` publishes no port in either mode.
 4. **The security headers live in the proxy** (HSTS without subdomains, `nosniff`, `Referrer-Policy`, no `Server`). They are written twice, in the Caddyfile and in the Traefik label/file config, with comments to keep them in sync.
    - No `X-Frame-Options` or `frame-ancestors`, because Discord frames the Activity.
@@ -44,6 +46,6 @@ Facts that shaped the details (checked 18 Nov 2026):
 - The `/api/auth/*` rate limit left open in ADR 0007 is done.
 - If the app is ever exposed without a proxy, `X-Forwarded-For` becomes spoofable and the rate limit can be bypassed. Never publish port 8080.
 - A Traefik with `forwardedHeaders.trustedIPs` or `insecure` passes the client's header on, but it still appends the address it saw, so the rightmost entry stays correct.
-- The Traefik router name `cs2-pickem` is fixed (compose doesn't interpolate label keys). Rename it in the override if it clashes.
+- The Traefik router name `cs2-pickem` is fixed (compose doesn't interpolate label keys). Rename it in `docker-compose.traefik-labels.yml` if it clashes.
 - The amd64 build (T17 builds both) also cross-compiles from an arm64 builder; the Dockerfile handles both directions.
 - distroless has no shell: debug with `docker compose logs`, or `docker run --rm --entrypoint /app/app … --help`. P4's `app restore` runs as a subcommand, as planned.

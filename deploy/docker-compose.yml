@@ -6,8 +6,9 @@
 #
 # Reverse proxy, chosen in .env:
 #   - bundled Caddy (default): COMPOSE_PROFILES=caddy
-#   - an existing Traefik:     COMPOSE_PROFILES= and
-#                              COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml
+#   - an existing Traefik:     COMPOSE_PROFILES= and COMPOSE_FILE with
+#                              docker-compose.traefik.yml (network), plus
+#                              docker-compose.traefik-labels.yml for labels
 #
 # `app` publishes no ports. Only the reverse proxy is reachable.
 

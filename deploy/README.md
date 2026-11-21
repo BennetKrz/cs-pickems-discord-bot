@@ -3,7 +3,7 @@
 One container (`app`: bot, API, sync worker and the Activity) runs behind a reverse proxy that terminates TLS for your domain. Pick one:
 
 - **Option A: the bundled Caddy** (default). It publishes ports 80/443 and gets Let's Encrypt certificates by itself.
-- **Option B: an existing Traefik v3** that already runs on the Pi. No Caddy container starts. `app` joins Traefik's Docker network, and you get either labels (B1) or a file-provider snippet (B2).
+- **Option B: an existing Traefik v3** that already runs on the Pi. No Caddy container starts and `app` joins Traefik's Docker network. The route comes either from Docker labels (B1) or from your own Traefik config, such as the file-provider snippet (B2).
 
 In both cases `app` publishes no port. Discord's proxy reaches the Activity through `https://<your domain>/`.
 
@@ -11,7 +11,8 @@ In both cases `app` publishes no port. Discord's proxy reaches the Activity thro
 | --- | --- |
 | `docker-compose.yml` | `app`, plus `caddy` in the compose profile `caddy` |
 | `Caddyfile` | Option A: TLS, security headers, access log |
-| `docker-compose.traefik.yml` | Option B: puts `app` on Traefik's network, with router labels (B1) |
+| `docker-compose.traefik.yml` | Option B: puts `app` on Traefik's network, nothing else |
+| `docker-compose.traefik-labels.yml` | Option B1: router, headers and service as Docker labels |
 | `traefik/pickem.yml` | Option B2: the same router for Traefik's file provider |
 | `.env.example` | Every setting, compose and app, in one file |
 
@@ -60,26 +61,28 @@ Keep `COMPOSE_PROFILES=caddy`; nothing else is needed. Caddy requests the certif
 
 ### Option B: existing Traefik
 
-Requirements on your Traefik (v3):
+Your Traefik must be attached to a Docker network, by default named `traefik`. Create it once with `docker network create traefik` if it doesn't exist yet. `docker-compose.traefik.yml` puts `app` on that network, where Traefik reaches it as `http://pickem-app:8080`. Where the route comes from is up to you:
 
-- an HTTPS entrypoint, by default named `websecure`;
-- a certificate resolver, by default named `letsencrypt`;
-- a Docker network that Traefik is attached to, by default named `traefik`. Create it once with `docker network create traefik` if it doesn't exist yet.
+- **B1: Docker provider (labels).** `docker-compose.traefik-labels.yml` adds labels that define the router `cs2-pickem` (``Host(`$DOMAIN`)``, TLS through your resolver), the `cs2-pickem-headers` middleware and the service on port 8080. Traefik needs an HTTPS entrypoint (default `websecure`) and a certificate resolver (default `letsencrypt`). In `.env`:
 
-In `.env`:
+  ```sh
+  COMPOSE_PROFILES=
+  COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml:docker-compose.traefik-labels.yml
+  TRAEFIK_NETWORK=traefik          # your names, if they differ
+  TRAEFIK_ENTRYPOINT=websecure
+  TRAEFIK_CERTRESOLVER=letsencrypt
+  ```
 
-```sh
-COMPOSE_PROFILES=
-COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml
-TRAEFIK_NETWORK=traefik          # your names, if they differ
-TRAEFIK_ENTRYPOINT=websecure
-TRAEFIK_CERTRESOLVER=letsencrypt
-```
+  If Traefik runs with `exposedByDefault=false`, the `traefik.enable=true` label opts in. To add your own middlewares (e.g. CrowdSec), append them to `traefik.http.routers.cs2-pickem.middlewares`.
+- **B2: your own Traefik config (file provider).** Copy `traefik/pickem.yml` into the directory your file provider watches, or merge it into your existing dynamic config. Then replace the host, the entrypoint and the resolver in it. The container gets no Traefik labels, so it doesn't matter whether your Traefik also watches Docker. In `.env`:
 
-With these two lines, plain `docker compose …` commands use the Traefik override and never start Caddy.
+  ```sh
+  COMPOSE_PROFILES=
+  COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml
+  TRAEFIK_NETWORK=proxy            # the network your Traefik is on
+  ```
 
-- **B1: Docker provider (labels).** Nothing else to do. The labels in `docker-compose.traefik.yml` define the router `cs2-pickem` (``Host(`$DOMAIN`)``, TLS through your resolver), the `cs2-pickem-headers` middleware and the service on port 8080. If Traefik runs with `exposedByDefault=false`, the `traefik.enable=true` label opts in. To add your own middlewares (e.g. CrowdSec), append them to `traefik.http.routers.cs2-pickem.middlewares`.
-- **B2: file provider.** Copy `traefik/pickem.yml` into the directory your file provider watches, then replace the host, the entrypoint and the resolver in it. It reaches the app as `http://pickem-app:8080` over the shared network. Without the Docker provider the labels are simply ignored. Use B1 or B2, not both.
+With these lines, plain `docker compose …` commands use the overrides and never start Caddy. Use B1 or B2, not both: together they define two routers for the same host.
 - **Traefik on another machine:** this compose stack doesn't cover that case. The app would need a published port, e.g. `ports: ["<pi-lan-ip>:8080:8080"]` in an override file, and the file-provider URL `http://<pi-lan-ip>:8080`. Don't forward 8080 on the router.
 
 Rate limits trust the **last** `X-Forwarded-For` entry, which your proxy writes. Both Caddy and Traefik (with its default `forwardedHeaders` settings) overwrite or append that header correctly. Don't publish port 8080 to the Internet.
@@ -107,6 +110,14 @@ Then open the Activity from your Discord server.
 | Restart | `docker compose restart app` (graceful, within 8 s) |
 | Stop everything | `docker compose down` (the data in `./data` stays) |
 | Back up by hand | `docker compose stop app && cp -a data data.bak-$(date +%F) && docker compose start app` (automatic backups: P4) |
+
+**Troubleshooting**
+
+| Symptom | Cause and fix |
+| --- | --- |
+| `(code: 14) unable to open database file` in the app log | The app user can't write to `./data`, often because Docker created it as root. Run `sudo chown -R $(id -u):$(id -g) data` and set `APP_UID`/`APP_GID` to match. Also remove any `DATABASE_URL` from `.env`. |
+| 404 with an empty body | The path doesn't exist (e.g. a typo in `/healthz`). Only `/`, the frontend files, `/healthz` and `/api/*` exist. |
+| Traefik answers 404 with no request in its access log for `cs2-pickem@…` | No router matches: check `DOMAIN` (B1) or the host in your dynamic config (B2), and that Traefik and `pickem-app` share `TRAEFIK_NETWORK`. |
 
 The SQLite database is `data/pickem.db` (with `-wal` and `-shm` while running). The image cache is `data/img-cache` and can be deleted at any time.
 

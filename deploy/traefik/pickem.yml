@@ -1,13 +1,14 @@
 # Traefik (v3) dynamic configuration for the file provider: the same router
-# as the labels in docker-compose.traefik.yml, for a Traefik that doesn't use
-# the Docker provider. Setup: deploy/README.md, "Option B2".
+# as the labels in docker-compose.traefik-labels.yml, for when you keep the
+# route in your own Traefik config. Setup: deploy/README.md, "Option B2".
 #
-# 1. Copy this file into the directory your file provider watches, e.g.
-#    providers.file.directory=/etc/traefik/dynamic.
+# 1. Copy this file into the directory your file provider watches (e.g.
+#    providers.file.directory=/etc/traefik/dynamic), or merge it into your
+#    existing dynamic config.
 # 2. Replace pickem.example.com, `websecure` and `letsencrypt` with your
 #    hostname, your HTTPS entrypoint and your certificate resolver.
-# 3. Start the stack with docker-compose.traefik.yml, so the container
-#    `pickem-app` is on the same Docker network as Traefik.
+# 3. Start the stack with docker-compose.traefik.yml only (not the labels
+#    file), so the container `pickem-app` is on Traefik's Docker network.
 
 http:
   routers:

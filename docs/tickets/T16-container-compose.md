@@ -1,7 +1,7 @@
 # T16 – Container image and Raspberry Pi compose stack
 
 - **Epic:** E – Deployment and CI/CD
-- **Status:** in review
+- **Status:** done
 - **Index:** [all tickets](README.md)
 
 **Goal:** `docker compose up -d` on a Raspberry Pi runs the whole product, behind either the bundled Caddy or an existing Traefik.
@@ -16,23 +16,27 @@
   - `app`: image `ghcr.io/<owner>/cs2-pickem:${IMAGE_TAG:-latest}`, `env_file`, volume `./data:/data` (SQLite and image cache), `restart: unless-stopped`, `stop_grace_period: 20s`, Watchtower opt-in label, memory limit 256 MB. **No published ports**: reachable only through the reverse proxy.
   - `caddy` (**optional**, compose profile `caddy`, enabled by default in the example `.env`): `caddy:2` with a `Caddyfile` of `{$DOMAIN} { reverse_proxy app:8080 }`. Publishes 80 and 443 (plus 443/udp for HTTP/3). Gets Let's Encrypt certificates automatically and keeps them in a `caddy_data` volume. Adds security headers and an access log.
   - `watchtower`: see T17.
-- **Existing Traefik instead of Caddy:** with Caddy's profile disabled, the override `deploy/docker-compose.traefik.yml` attaches `app` to Traefik's external Docker network. It carries router, TLS (certresolver), security-header middleware and service labels, configurable through `.env` (network, entrypoint, resolver). `deploy/traefik/pickem.yml` is the same configuration as a snippet for Traefik's file provider.
+- **Existing Traefik instead of Caddy:** with Caddy's profile disabled, the override `deploy/docker-compose.traefik.yml` attaches `app` to Traefik's external Docker network (name from `.env`), nothing else. The route comes from one of two places:
+  - the optional second override `deploy/docker-compose.traefik-labels.yml`, which adds router, TLS (certresolver), security-header middleware and service labels for Traefik's Docker provider (entrypoint and resolver from `.env`);
+  - or `deploy/traefik/pickem.yml`, the same configuration as a snippet for the user's own Traefik config (file provider).
 - **Network setup** (README): a DNS A record, plus AAAA if you use IPv6, for e.g. `pickem.<your-domain>` pointing to your home IP. The router forwards TCP 80 and 443 to the Pi (to Caddy, or to your Traefik). Use DynDNS (router feature or a `ddclient` container) if the home IP changes. The Discord URL mapping `/` points to that hostname.
 - **Hardening:** only the reverse proxy (Caddy or Traefik) is reachable from outside. The app rate-limits `/api/auth/*` and admin endpoints (e.g. `tower_governor`). The host firewall (ufw) allows 80/443 from anywhere and SSH from the LAN only. Unattended security updates are enabled on the Pi OS.
 - `deploy/README.md`: Pi prerequisites (64-bit OS, Pi 4 with 2 GB or a Pi 5, SSD recommended over SD card because of database writes), network setup, both proxy options, first start, logs, update, rollback by pinning `IMAGE_TAG=sha-<short>`.
 
 **Acceptance criteria**
 
-- [ ] On a clean Raspberry Pi OS (64-bit), following the README brings the Activity up through Discord.
+- [x] On a clean Raspberry Pi OS (64-bit), following the README brings the Activity up through Discord.
 - [x] The container reports *healthy*, and data survives `docker compose down && up`.
 - [x] Final image under 150 MB; idle memory of `app` under 150 MB.
-- [ ] `https://<your-domain>/healthz` answers from outside the home network with a valid certificate, and port 8080 is not reachable from outside.
+- [x] `https://<your-domain>/healthz` answers from outside the home network with a valid certificate, and port 8080 is not reachable from outside.
 - [x] With Caddy's profile disabled and the Traefik override enabled, an existing Traefik serves the app (labels or file-provider snippet), and no Caddy container runs.
 
 **Notes**
 
 - Decisions: [ADR 0008](../adr/0008-container-image-and-proxy.md). The final image is distroless `cc-debian13:nonroot`. The Rust stage cross-compiles with Debian's cross gcc, so an arm64 image builds on amd64 without QEMU.
-- Proxy choice in `deploy/.env`: `COMPOSE_PROFILES=caddy` (default), or `COMPOSE_PROFILES=` with `COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml`.
+- Proxy choice in `deploy/.env`:
+  - `COMPOSE_PROFILES=caddy` (default);
+  - or `COMPOSE_PROFILES=` with `COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml`, plus `:docker-compose.traefik-labels.yml` for the Docker-label route (B1). Without it, the route comes from your own Traefik config (B2), and the container carries no Traefik labels.
 - Rate limits (`api::ratelimit`): `/api/auth/*` allows 30 at once, then 1 per 2 s; `/api/admin/*` allows 60, then 1 per s. The key is the rightmost `X-Forwarded-For` entry, else the peer. The burst is generous because Discord's proxy hides user IPs.
 - Tests:
   - `api/src/ratelimit.rs`: key extraction, the JSON 429 with `Retry-After`, separate buckets, no limit on health and frontend;
@@ -46,7 +50,8 @@
   - port 8080 isn't reachable from the host;
   - through both proxies, 30 auth requests pass, then a 429 follows, and a forged `X-Forwarded-For` doesn't help;
   - the arm64 image cross-builds (aarch64 ELF, 18 MB), but couldn't be run here (no QEMU).
-- Open for the owner, on the Pi: AC1 (clean Pi OS, Activity through Discord) and AC4 (reachable from outside with a real certificate).
+- Checked by the owner on the Pi on 21 Nov 2026, with an existing Traefik (Option B2: the route in its own dynamic config, the app on its network `proxy`, no labels file). `/healthz` answers from outside the home network through Traefik's certificate, and the Activity launches from Discord with the URL mapping on the domain. `app` publishes no port.
+  - Pitfall seen there: a `data/` directory the app user can't write to gives SQLite `(code: 14) unable to open database file`. Fix: `chown` it to `APP_UID:APP_GID`.
 - Follow-ups for T17:
   - build with `docker buildx build --platform linux/arm64,linux/amd64 --build-arg GIT_SHA=…`, using cache mounts or a GHA cache;
   - Watchtower must use label-enable mode, so it never touches Caddy or the user's Traefik;

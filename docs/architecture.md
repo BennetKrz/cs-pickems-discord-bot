@@ -86,7 +86,7 @@ The canonical schema is specified in [T02](tickets/T02-domain-model-database.md)
   - `app`, with no published ports;
   - the reverse proxy, either:
     - `caddy` (compose profile `caddy`, the default), publishing 80/443 with automatic Let's Encrypt certificates; or
-    - an **existing Traefik** outside this stack: `docker-compose.traefik.yml` attaches `app` to Traefik's network with router labels, or `traefik/pickem.yml` configures Traefik's file provider;
+    - an **existing Traefik** outside this stack: `docker-compose.traefik.yml` attaches `app` to Traefik's network, and the route comes from `docker-compose.traefik-labels.yml` (Docker labels) or `traefik/pickem.yml` (Traefik's file provider);
   - `watchtower`, updating only the labeled `app` container (T17).
 - The Discord Activity URL mapping `/` points to the owner's domain. Discord's proxy forwards Activity requests to the reverse proxy, which forwards them to `app:8080`.
 - Images are built in GitHub Actions for arm64 (cross-compiled, not under QEMU) and pushed to GHCR. Watchtower polls the configured tag.

@@ -13,7 +13,7 @@ A self-hosted Discord app for one server's Counter-Strike 2 pick'em. Members pic
 | --- | --- |
 | `backend/` | Cargo workspace. Crates in `backend/crates/`: `domain`, `store`, `sources`, `sync`, `api`, `bot`, and `app` (the binary) |
 | `frontend/` | The Activity: React + Vite + TypeScript, built to `frontend/dist` |
-| `deploy/` | Compose stack, Caddyfile, Traefik override and snippet, env example (T16); setup in [deploy/README.md](deploy/README.md). The `Dockerfile` is at the repo root. |
+| `deploy/` | Compose stack, Caddyfile, Traefik overrides (network, labels) and snippet, env example (T16); setup in [deploy/README.md](deploy/README.md). The `Dockerfile` is at the repo root. |
 
 The backend is one binary. It serves the built frontend at `/`, the JSON API under `/api/*`, and `GET /healthz`.
 
