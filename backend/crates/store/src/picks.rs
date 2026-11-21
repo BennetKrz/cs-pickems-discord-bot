@@ -7,12 +7,13 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use domain::{MapPick, MatchId, Pick, PickId, PickParts, SeriesScore, TeamId};
+use domain::{MapPick, MatchId, Pick, PickId, PickParts, ResultState, SeriesScore, TeamId};
 use serde_json::{Value, json};
 use sqlx::sqlite::SqliteRow;
 use sqlx::types::Json;
 use sqlx::{Acquire, Row, Sqlite, SqliteConnection, SqliteExecutor};
 
+use crate::row::enum_col;
 use crate::{DbResult, Ts};
 
 /// One saved version of a pick.
@@ -33,6 +34,9 @@ pub struct PickResult {
     pub breakdown: Value,
     pub rules_version: i64,
     pub settled_at: DateTime<Utc>,
+    pub state: ResultState,
+    /// Parts still waiting for a result or for data (missing round scores).
+    pub pending_parts: i64,
 }
 
 /// JSON form of a pick's parts, as stored in `pick_revisions.snapshot`.
@@ -226,14 +230,16 @@ fn attach_maps(picks: &mut [Pick], maps: Vec<(PickId, MapPick)>) {
 
 async fn list_for_match_in(
     conn: &mut SqliteConnection,
-    guild_id: &str,
+    guild_id: Option<&str>,
     match_id: MatchId,
 ) -> DbResult<Vec<Pick>> {
     let mut picks: Vec<Pick> = sqlx::query(concat!(
         "SELECT ",
         pick_columns!(),
-        " FROM picks WHERE guild_id = ? AND match_id = ? ORDER BY created_at, id"
+        " FROM picks WHERE (? IS NULL OR guild_id = ?) AND match_id = ? \
+         ORDER BY created_at, id"
     ))
+    .bind(guild_id)
     .bind(guild_id)
     .bind(match_id.0)
     .try_map(pick_from_row)
@@ -244,8 +250,10 @@ async fn list_for_match_in(
         "SELECT pm.pick_id, pm.map_number, pm.winner_team_id, pm.rounds_a, pm.rounds_b, \
            pm.overtime \
          FROM pick_maps pm JOIN picks p ON p.id = pm.pick_id \
-         WHERE p.guild_id = ? AND p.match_id = ? ORDER BY pm.pick_id, pm.map_number",
+         WHERE (? IS NULL OR p.guild_id = ?) AND p.match_id = ? \
+         ORDER BY pm.pick_id, pm.map_number",
     )
+    .bind(guild_id)
     .bind(guild_id)
     .bind(match_id.0)
     .try_map(map_pick_from_row)
@@ -265,9 +273,20 @@ where
     A: Acquire<'a, Database = Sqlite>,
 {
     let mut tx = conn.begin().await?;
-    let picks = list_for_match_in(&mut tx, guild_id, match_id).await?;
+    let picks = list_for_match_in(&mut tx, Some(guild_id), match_id).await?;
     tx.commit().await?;
     Ok(picks)
+}
+
+/// Every pick for a match across all guilds, with map parts, oldest first.
+/// For settlement (T11), which recomputes a match for every guild at once.
+/// Takes a connection, not `Acquire`: settlement calls it inside its own
+/// transaction from a spawned task, which needs a `Send` future.
+pub async fn list_for_match_all_guilds(
+    conn: &mut SqliteConnection,
+    match_id: MatchId,
+) -> DbResult<Vec<Pick>> {
+    list_for_match_in(conn, None, match_id).await
 }
 
 /// The Discord names of a pick's author, for display (T10).
@@ -300,7 +319,7 @@ where
     A: Acquire<'a, Database = Sqlite>,
 {
     let mut tx = conn.begin().await?;
-    let picks = list_for_match_in(&mut tx, guild_id, match_id).await?;
+    let picks = list_for_match_in(&mut tx, Some(guild_id), match_id).await?;
     let mut authors: HashMap<String, (PickAuthor, i64)> = sqlx::query(
         "SELECT p.user_id, u.username, u.global_name, u.avatar_hash, gm.nick, \
            (SELECT COUNT(*) FROM pick_revisions r WHERE r.pick_id = p.id) AS revisions \
@@ -474,40 +493,88 @@ pub async fn list_revisions_for_match(
 /// and overwrites, never adds (T11).
 pub async fn upsert_result(ex: impl SqliteExecutor<'_>, r: &PickResult) -> DbResult<()> {
     sqlx::query(
-        "INSERT INTO pick_results (pick_id, points, breakdown, rules_version, settled_at) \
-         VALUES (?, ?, ?, ?, ?) \
+        "INSERT INTO pick_results (pick_id, points, breakdown, rules_version, settled_at, \
+           state, pending_parts) \
+         VALUES (?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT (pick_id) DO UPDATE SET points = excluded.points, \
            breakdown = excluded.breakdown, rules_version = excluded.rules_version, \
-           settled_at = excluded.settled_at",
+           settled_at = excluded.settled_at, state = excluded.state, \
+           pending_parts = excluded.pending_parts",
     )
     .bind(r.pick_id.0)
     .bind(r.points)
     .bind(Json(&r.breakdown))
     .bind(r.rules_version)
     .bind(Ts(r.settled_at))
+    .bind(r.state.as_str())
+    .bind(r.pending_parts)
     .execute(ex)
     .await?;
     Ok(())
+}
+
+macro_rules! result_columns {
+    () => {
+        "r.pick_id, r.points, r.breakdown, r.rules_version, r.settled_at, r.state, \
+         r.pending_parts"
+    };
+}
+
+fn result_from_row(row: SqliteRow) -> DbResult<PickResult> {
+    Ok(PickResult {
+        pick_id: PickId(row.try_get("pick_id")?),
+        points: row.try_get("points")?,
+        breakdown: row.try_get::<Json<Value>, _>("breakdown")?.0,
+        rules_version: row.try_get("rules_version")?,
+        settled_at: row.try_get("settled_at")?,
+        state: enum_col(&row, "state")?,
+        pending_parts: row.try_get("pending_parts")?,
+    })
 }
 
 pub async fn get_result(
     ex: impl SqliteExecutor<'_>,
     pick_id: PickId,
 ) -> DbResult<Option<PickResult>> {
-    sqlx::query(
-        "SELECT pick_id, points, breakdown, rules_version, settled_at FROM pick_results \
-         WHERE pick_id = ?",
-    )
+    sqlx::query(concat!(
+        "SELECT ",
+        result_columns!(),
+        " FROM pick_results r WHERE r.pick_id = ?"
+    ))
     .bind(pick_id.0)
-    .try_map(|row: SqliteRow| {
-        Ok(PickResult {
-            pick_id: PickId(row.try_get("pick_id")?),
-            points: row.try_get("points")?,
-            breakdown: row.try_get::<Json<Value>, _>("breakdown")?.0,
-            rules_version: row.try_get("rules_version")?,
-            settled_at: row.try_get("settled_at")?,
-        })
-    })
+    .try_map(result_from_row)
     .fetch_optional(ex)
     .await
+}
+
+/// The results of every pick of a match, across guilds, by pick ID.
+pub async fn results_for_match(
+    ex: impl SqliteExecutor<'_>,
+    match_id: MatchId,
+) -> DbResult<Vec<PickResult>> {
+    sqlx::query(concat!(
+        "SELECT ",
+        result_columns!(),
+        " FROM pick_results r JOIN picks p ON p.id = r.pick_id \
+          WHERE p.match_id = ? ORDER BY r.pick_id"
+    ))
+    .bind(match_id.0)
+    .try_map(result_from_row)
+    .fetch_all(ex)
+    .await
+}
+
+/// Deletes the results of every pick of a match, e.g. after an admin
+/// reopened it. Returns how many were deleted.
+pub async fn delete_results_for_match(
+    ex: impl SqliteExecutor<'_>,
+    match_id: MatchId,
+) -> DbResult<u64> {
+    let res = sqlx::query(
+        "DELETE FROM pick_results WHERE pick_id IN (SELECT id FROM picks WHERE match_id = ?)",
+    )
+    .bind(match_id.0)
+    .execute(ex)
+    .await?;
+    Ok(res.rows_affected())
 }

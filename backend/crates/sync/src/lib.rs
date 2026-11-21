@@ -9,6 +9,8 @@
 //!   precedence ([`precedence`]), and emits domain events on the [`bus`].
 //! - [`manual`]: admin overrides (the `manual` source), void and reopen
 //!   (T05).
+//! - [`settle`]: settlement, which recomputes `pick_results` from match
+//!   results on domain events and by periodic sweep (T11).
 
 pub mod budget;
 pub mod bus;
@@ -19,6 +21,7 @@ pub mod manual;
 pub mod precedence;
 pub mod reconcile;
 pub mod scheduler;
+pub mod settle;
 
 pub use budget::Priority;
 pub use bus::EventBus;
@@ -29,3 +32,4 @@ pub use manual::{ManualError, ManualService, Outcome, Override, OverrideField};
 pub use precedence::{FieldGroup, MANUAL, Precedence, PrecedenceError};
 pub use reconcile::{ReconcileError, Reconciler, Report};
 pub use scheduler::{Scheduler, SchedulerParts, SourceEntry, SyncError, TickReport};
+pub use settle::{RulesMode, SettleError, SettleReport, run_settler};

@@ -164,6 +164,20 @@ string_enum! {
 }
 
 string_enum! {
+    /// How settled a pick's points are (T11), stored in `pick_results.state`.
+    ResultState {
+        /// The match is live: finished maps count, the rest may still move.
+        Provisional => "provisional",
+        /// The match is finished. Parts still waiting for data (missing
+        /// round scores) are counted in `pending_parts`.
+        Final => "final",
+        /// Canceled, forfeited or voided by an admin: 0 points, and the pick
+        /// does not count for accuracy.
+        Void => "void",
+    }
+}
+
+string_enum! {
     /// Side of a double-elimination bracket; `Final` is the grand final.
     BracketSide {
         Upper => "upper",
@@ -464,6 +478,7 @@ mod tests {
         round_trip(EntityType::ALL);
         round_trip(Side::ALL);
         round_trip(UnlinkedReason::ALL);
+        round_trip(ResultState::ALL);
     }
 
     #[test]

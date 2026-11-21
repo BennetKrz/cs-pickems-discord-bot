@@ -27,6 +27,10 @@ pub struct SyncConfig {
     pub search_cache: Duration,
     /// Interval of the lock ticker.
     pub lock_every: Duration,
+    /// Interval of the settlement sweep (T11): re-settles live matches,
+    /// catches up on missed events and voids parts whose data deadline
+    /// passed.
+    pub settle_every: Duration,
     /// How often the scheduler loop wakes up to look for due jobs.
     pub tick_every: Duration,
     /// Upper bound of the random delay of a job's first run after a start.
@@ -48,6 +52,7 @@ impl Default for SyncConfig {
             corrections_after: vec![Duration::minutes(10), Duration::hours(2)],
             search_cache: Duration::hours(24),
             lock_every: Duration::seconds(30),
+            settle_every: Duration::minutes(10),
             tick_every: Duration::seconds(10),
             startup_jitter: Duration::seconds(60),
             failure_backoff: Duration::minutes(5),
@@ -68,6 +73,7 @@ impl SyncConfig {
             ("live_every", self.live_every),
             ("search_cache", self.search_cache),
             ("lock_every", self.lock_every),
+            ("settle_every", self.settle_every),
             ("tick_every", self.tick_every),
         ];
         for (name, d) in positive {

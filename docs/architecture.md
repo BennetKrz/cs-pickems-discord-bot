@@ -78,7 +78,7 @@ flowchart LR
 
 ## Data model
 
-The canonical schema is specified in [T02](tickets/T02-domain-model-database.md). Main tables: `teams`, `events`, `stages`, `matches`, `maps`, `external_refs`, `source_records`, `users`, `guild_members`, `picks`, `pick_maps`, `pick_revisions`, `pick_results`, `guild_settings`, `followed_events`, `audit_log`, `sync_state`. T03 adds `field_sources` (which source set each value) and `unlinked_refs` (the unlinked queue); see [ADR 0004](adr/0004-source-adapters-reconciliation.md). T07 adds `sessions` (hashed bearer tokens); see [ADR 0007](adr/0007-discord-auth-sessions.md).
+The canonical schema is specified in [T02](tickets/T02-domain-model-database.md). Main tables: `teams`, `events`, `stages`, `matches`, `maps`, `external_refs`, `source_records`, `users`, `guild_members`, `picks`, `pick_maps`, `pick_revisions`, `pick_results`, `guild_settings`, `followed_events`, `audit_log`, `sync_state`. T03 adds `field_sources` (which source set each value) and `unlinked_refs` (the unlinked queue); see [ADR 0004](adr/0004-source-adapters-reconciliation.md). T07 adds `sessions` (hashed bearer tokens); see [ADR 0007](adr/0007-discord-auth-sessions.md). T11 adds `scoring_rule_versions` (rules history) and `match_scoring` (the rules version pinned per guild and match), plus `state` and `pending_parts` on `pick_results`; see [ADR 0011](adr/0011-scoring-and-settlement.md).
 
 ## Deployment
 

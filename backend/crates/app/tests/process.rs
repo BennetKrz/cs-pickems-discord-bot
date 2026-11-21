@@ -233,6 +233,50 @@ fn reconcile_replay_runs_and_exits() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("--replay"));
 }
 
+/// T11: `app rules show|set` and `app rescore --all` run and exit without
+/// starting the server.
+#[test]
+fn rules_and_rescore_run_and_exit() {
+    let dir = tempfile::tempdir().unwrap();
+    let guild = "100000000000000001";
+    let run = |args: &[&str]| {
+        let mut cmd = base_command(dir.path());
+        full_env(&mut cmd, dir.path(), free_port());
+        let (out, _) = wait_with_deadline(cmd.args(args).spawn().unwrap(), Duration::from_secs(10));
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let log = stdout.clone() + &String::from_utf8_lossy(&out.stderr);
+        assert!(!log.contains("HTTP listening"), "{log}");
+        (out.status, stdout, log)
+    };
+
+    let (status, stdout, log) = run(&["rules", "show", "--guild", guild]);
+    assert!(status.success(), "{log}");
+    assert!(stdout.contains("\"version\": 1"), "{stdout}");
+    assert!(stdout.contains("\"map_score\": 2"), "{stdout}");
+
+    let file = dir.path().join("rules.json");
+    std::fs::write(&file, r#"{ "winner": 5 }"#).unwrap();
+    let file = file.to_str().unwrap();
+    let (status, stdout, log) = run(&["rules", "set", "--guild", guild, file]);
+    assert!(status.success(), "{log}");
+    assert!(stdout.contains("version 2"), "{stdout}");
+
+    let (_, stdout, _) = run(&["rules", "show", "--guild", guild]);
+    assert!(stdout.contains("\"version\": 2"), "{stdout}");
+    assert!(stdout.contains("\"winner\": 5"), "{stdout}");
+
+    // A typo in the file is rejected, and nothing changes.
+    std::fs::write(dir.path().join("bad.json"), r#"{ "winer": 5 }"#).unwrap();
+    let bad = dir.path().join("bad.json");
+    let (status, _, log) = run(&["rules", "set", "--guild", guild, bad.to_str().unwrap()]);
+    assert!(!status.success());
+    assert!(log.contains("not a valid rules file"), "{log}");
+
+    let (status, _, log) = run(&["rescore", "--all"]);
+    assert!(status.success(), "{log}");
+    assert!(log.contains("rescore finished"), "{log}");
+}
+
 /// T05: production builds have no dev endpoints, and refuse the fixture
 /// source instead of silently running without it.
 #[cfg(not(feature = "dev"))]
