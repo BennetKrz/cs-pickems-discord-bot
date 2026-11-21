@@ -27,6 +27,7 @@ pub mod error;
 pub mod etag;
 pub mod img;
 pub mod me;
+pub mod ratelimit;
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -144,10 +145,13 @@ pub fn router_with(state: AppState, static_dir: &Path, extra: Router<AppState>) 
     }
 
     let api = Router::new()
-        .nest("/auth", auth::routes())
+        .nest("/auth", ratelimit::limit(auth::routes(), ratelimit::AUTH))
         .merge(me::routes())
         .nest("/img", img::routes())
-        .nest("/admin", admin::routes())
+        .nest(
+            "/admin",
+            ratelimit::limit(admin::routes(), ratelimit::ADMIN),
+        )
         .merge(extra)
         .fallback(api_not_found)
         .layer(axum::middleware::from_fn(etag::layer));
@@ -161,15 +165,19 @@ pub fn router_with(state: AppState, static_dir: &Path, extra: Router<AppState>) 
 }
 
 /// Serves `app` on `listener` until `shutdown` fires, then drains in-flight
-/// requests.
+/// requests. Handlers see the peer address as `ConnectInfo<SocketAddr>`
+/// (the rate limit's fallback key, [`ratelimit`]).
 pub async fn serve(
     listener: TcpListener,
     app: Router,
     shutdown: CancellationToken,
 ) -> std::io::Result<()> {
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown.cancelled_owned())
-        .await
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown.cancelled_owned())
+    .await
 }
 
 #[derive(Debug, Serialize)]

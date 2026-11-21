@@ -22,4 +22,4 @@
 - [ ] A merge to `main` changes `git_sha` in `/healthz` on the Pi within about 20 min.
 - [ ] A failing test produces no image.
 - [ ] A warm-cache pipeline run takes under 15 min.
-- [ ] Only the `app` container is updated by Watchtower; `caddy` stays pinned.
+- [ ] Only the `app` container is updated by Watchtower; `caddy` (when its profile is enabled) stays pinned, and an existing Traefik (T16, option B) is never touched.

@@ -22,7 +22,7 @@ Tickets on the same line can run in parallel.
 - **B – Discord integration (T07–T09):** login through the Activity, a small set of bot commands, channel posts, and admin control over which events are pickable.
 - **C – Picks and scoring (T10–T11):** a pick has three optional parts; each part is scored on its own. All rules are pure functions in `domain`.
 - **D – Activity views (T12–T15):** vertical slices (read API plus screen), all buildable against the fixture source (T05).
-- **E – Deployment and CI/CD (T16–T17):** one image plus Caddy and Watchtower on the Pi; a green merge to `main` reaches the Pi automatically.
+- **E – Deployment and CI/CD (T16–T17):** one image plus Watchtower on the Pi, behind the bundled Caddy or an existing Traefik; a green merge to `main` reaches the Pi automatically.
 - **P – Proposed extras (P1–P7):** optional, none blocks the core product. Suggested first: P4, then P1.
 
 ## Core tickets
@@ -44,7 +44,7 @@ Tickets on the same line can run in parallel.
 | [T13](T13-event-bracket-view.md) | Event view with bracket tree | D | T07, T12 | todo |
 | [T14](T14-leaderboard.md) | Leaderboard | D | T11, T07 | todo |
 | [T15](T15-player-profile.md) | Player profile and pick history | D | T11, T14 | todo |
-| [T16](T16-container-compose.md) | Container image and Raspberry Pi compose stack | E | T01 (can start early; finish after T07) | todo |
+| [T16](T16-container-compose.md) | Container image and Raspberry Pi compose stack | E | T01 (can start early; finish after T07) | in review |
 | [T17](T17-ci-cd-deployment.md) | CI/CD pipeline and automatic deployment | E | T16 | todo |
 
 ## Proposed extras (optional)

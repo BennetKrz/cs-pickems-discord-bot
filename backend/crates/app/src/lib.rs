@@ -2,6 +2,7 @@
 //! bot and sync worker, and graceful shutdown. `main.rs` is a thin wrapper.
 
 pub mod config;
+pub mod healthcheck;
 pub mod shutdown;
 pub mod telemetry;
 

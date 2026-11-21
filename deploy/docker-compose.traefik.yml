@@ -1,0 +1,41 @@
+# Use an existing Traefik (v3) instead of the bundled Caddy.
+# Setup: deploy/README.md, "Option B". In .env:
+#
+#   COMPOSE_PROFILES=
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml
+#
+# `app` joins Traefik's Docker network; Traefik terminates TLS and forwards
+# to app:8080. Still no published ports.
+#
+# Traefik with the Docker provider picks up the labels below. With the file
+# provider only, the labels are ignored: use traefik/pickem.yml instead.
+
+services:
+  app:
+    networks:
+      - default
+      - traefik
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      # Router
+      traefik.http.routers.cs2-pickem.rule: Host(`${DOMAIN:?set DOMAIN in .env}`)
+      traefik.http.routers.cs2-pickem.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.cs2-pickem.tls: "true"
+      traefik.http.routers.cs2-pickem.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.routers.cs2-pickem.middlewares: cs2-pickem-headers
+      traefik.http.routers.cs2-pickem.service: cs2-pickem
+      # Security headers, as in the Caddyfile. No X-Frame-Options:
+      # Discord shows the Activity in an iframe. No compression: it would
+      # alter the API's ETags.
+      traefik.http.middlewares.cs2-pickem-headers.headers.stsseconds: "31536000"
+      traefik.http.middlewares.cs2-pickem-headers.headers.contenttypenosniff: "true"
+      traefik.http.middlewares.cs2-pickem-headers.headers.referrerpolicy: strict-origin-when-cross-origin
+      traefik.http.middlewares.cs2-pickem-headers.headers.customresponseheaders.Server: ""
+      # Service
+      traefik.http.services.cs2-pickem.loadbalancer.server.port: "8080"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
