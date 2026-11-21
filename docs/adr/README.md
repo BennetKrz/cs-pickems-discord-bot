@@ -18,3 +18,4 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | [0007](0007-discord-auth-sessions.md) | Discord sign-in, sessions, admin check and image proxy | accepted |
 | [0008](0008-container-image-and-proxy.md) | Container image, optional Caddy or existing Traefik, rate limits | accepted |
 | [0009](0009-ci-cd-and-watchtower.md) | CI/CD pipeline, image tags and Watchtower | accepted |
+| [0010](0010-pick-rules-and-api.md) | Pick rules and pick API | accepted |

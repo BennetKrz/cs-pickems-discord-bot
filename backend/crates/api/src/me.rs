@@ -33,6 +33,17 @@ async fn me(State(st): State<AppState>, member: Member) -> Result<Json<MeBody>, 
     Ok(Json(me_body(&st, &member).await?))
 }
 
+/// The name the Activity shows for a member: server nickname, else global
+/// display name, else username. Blank names are skipped.
+pub fn display_name(nick: Option<&str>, global_name: Option<&str>, username: &str) -> String {
+    [nick, global_name]
+        .into_iter()
+        .flatten()
+        .find(|n| !n.trim().is_empty())
+        .unwrap_or(username)
+        .to_owned()
+}
+
 /// Builds the member's profile from the database. Admin status comes from
 /// the admin check; if Discord can't be asked, it is `false` for now.
 pub async fn me_body(st: &AppState, m: &Member) -> Result<MeBody, ApiError> {
@@ -58,11 +69,7 @@ pub async fn me_body(st: &AppState, m: &Member) -> Result<MeBody, ApiError> {
             false
         }
     };
-    let display_name = [nick, user.global_name.clone()]
-        .into_iter()
-        .flatten()
-        .find(|n| !n.trim().is_empty())
-        .unwrap_or_else(|| user.username.clone());
+    let display_name = display_name(nick.as_deref(), user.global_name.as_deref(), &user.username);
     Ok(MeBody {
         avatar_url: img::avatar_url(&user.discord_user_id, user.avatar_hash.as_deref()),
         user_id: user.discord_user_id,

@@ -1,5 +1,6 @@
-//! Admin API: manual overrides, void and reopen of matches (T05), and the
-//! sync status and a manual resync of an event (T06).
+//! Admin API: manual overrides, void and reopen of matches (T05), the
+//! sync status and a manual resync of an event (T06), and the revision
+//! history of picks (T10).
 //!
 //! Every route needs an [`AdminUser`], resolved by the [`AdminAuth`] in the
 //! app state: in production the session plus the admin rule
@@ -264,6 +265,7 @@ pub fn routes() -> Router<AppState> {
         .route("/matches/{id}/void", post(void))
         .route("/matches/{id}/unvoid", post(unvoid))
         .route("/matches/{id}/reopen", post(reopen))
+        .route("/matches/{id}/pick-revisions", get(pick_revisions))
         .route("/status", get(sync_status))
         .route("/events/{id}/resync", post(resync))
 }
@@ -467,6 +469,90 @@ async fn resync(
             queued: true,
         }),
     ))
+}
+
+// ---- pick history (T10) -----------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+struct RevisionBody {
+    edited_at: DateTime<Utc>,
+    /// The pick's parts as saved (`store::picks::snapshot`).
+    snapshot: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+struct PickHistoryBody {
+    user_id: String,
+    display_name: String,
+    /// Oldest first; the last one is the current pick.
+    revisions: Vec<RevisionBody>,
+}
+
+#[derive(Debug, Serialize)]
+struct PickRevisionsBody {
+    match_id: i64,
+    picks: Vec<PickHistoryBody>,
+}
+
+/// `GET /api/admin/matches/{id}/pick-revisions`: the full edit history of
+/// every current pick for the match in the admin's guild. The guild comes
+/// from the session, so this needs one also in dev builds.
+async fn pick_revisions(
+    State(st): State<AppState>,
+    _admin: AdminUser,
+    member: crate::auth::Member,
+    Path(id): Path<i64>,
+) -> Result<Json<PickRevisionsBody>, ApiError> {
+    let id = MatchId(id);
+    let mut tx = st.pool.begin().await.map_err(internal)?;
+    if store::matches::get(&mut *tx, id)
+        .await
+        .map_err(internal)?
+        .is_none()
+    {
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            format!("match {id} not found"),
+        ));
+    }
+    let picks = store::picks::list_for_match_with_authors(&mut *tx, &member.guild_id, id)
+        .await
+        .map_err(internal)?;
+    let mut revisions = store::picks::list_revisions_for_match(&mut *tx, &member.guild_id, id)
+        .await
+        .map_err(internal)?
+        .into_iter()
+        .peekable();
+    tx.commit().await.map_err(internal)?;
+
+    // Both lists are ordered by pick (created_at, id).
+    let picks = picks
+        .into_iter()
+        .map(|ap| {
+            let mut revs = Vec::new();
+            while let Some((_, r)) = revisions.next_if(|(_, r)| r.pick_id == ap.pick.id) {
+                revs.push(RevisionBody {
+                    edited_at: r.edited_at,
+                    snapshot: r.snapshot,
+                });
+            }
+            let a = &ap.author;
+            PickHistoryBody {
+                display_name: crate::me::display_name(
+                    a.nick.as_deref(),
+                    a.global_name.as_deref(),
+                    &a.username,
+                ),
+                user_id: ap.pick.user_id,
+                revisions: revs,
+            }
+        })
+        .collect();
+    Ok(Json(PickRevisionsBody {
+        match_id: id.0,
+        picks,
+    }))
 }
 
 #[cfg(test)]

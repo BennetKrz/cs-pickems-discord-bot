@@ -27,3 +27,12 @@
 - [ ] The pick form turns read-only exactly at the lock, also if the Activity stayed open.
 - [ ] Other members' picks are visible before and after the lock.
 - [ ] All times show in the viewer's local time zone.
+
+**Notes**
+
+- From T10 ([ADR 0010](../adr/0010-pick-rules-and-api.md)): this ticket takes over the UI halves of two T10 criteria.
+  - Edits show in everyone's view within one poll interval: poll `GET /api/matches/{id}/picks` with `usePoll`.
+  - The edit controls hide after the lock: use `pickable`/`locked` from that response.
+  - Also show the soft hint when map picks and the series pick disagree, e.g. "your map picks add up to 2:1, your series pick is 2:0".
+  - Map the error codes `pick_locked`, `not_pickable` and `invalid_pick` to messages.
+  - Types and `ApiClient.putPick`/`deletePick` are in `frontend/src/api.ts`.

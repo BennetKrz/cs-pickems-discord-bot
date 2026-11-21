@@ -38,7 +38,7 @@ Tickets on the same line can run in parallel.
 | [T07](T07-discord-auth-activity-shell.md) | Discord application, authentication and Activity shell | B | T01, T02 | done |
 | [T08](T08-bot-commands-announcements.md) | Bot commands, channel announcements and Activity launch | B | T07, T03 (domain events) | todo |
 | [T09](T09-followed-events.md) | Followed events | B | T06, T08 | todo |
-| [T10](T10-pick-rules-api.md) | Pick rules and pick API | C | T02, T06 (lock ticker), T07 (auth) | todo |
+| [T10](T10-pick-rules-api.md) | Pick rules and pick API | C | T02, T06 (lock ticker), T07 (auth) | in review |
 | [T11](T11-scoring-settlement.md) | Scoring and settlement | C | T10, T03 (domain events), T05 (void) | todo |
 | [T12](T12-matches-views.md) | Matches overview and match detail | D | T07, T10, T11 | todo |
 | [T13](T13-event-bracket-view.md) | Event view with bracket tree | D | T07, T12 | todo |

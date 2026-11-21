@@ -1,4 +1,4 @@
-//! Repository round trips against a temp database.
+//! Remine.iter().ma            .all(|(p, n)| p.user_id == ALICE && p.guild_id == GUILD && *n == 1)(|(p, _)| p.match_id).collect::<Vec<_>>()ository round trips against a temp database.
 
 mod common;
 
@@ -485,6 +485,225 @@ async fn picks_of_a_match_include_every_member() {
             .map(|p| (p.user_id.as_str(), &p.parts))
             .collect::<Vec<_>>(),
         [(ALICE, &alice), (BOB, &bob)]
+    );
+}
+
+#[tokio::test]
+async fn picks_of_a_match_with_authors_carry_their_names() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    // Alice has a global name and a server nick, Bob only his username.
+    users::upsert_user(
+        &db.pool,
+        &User {
+            discord_user_id: ALICE.into(),
+            username: "alice".into(),
+            global_name: Some("Alice".into()),
+            avatar_hash: Some("abc".into()),
+            updated_at: at(9, 0),
+        },
+    )
+    .await
+    .unwrap();
+    users::upsert_member(
+        &db.pool,
+        &GuildMember {
+            guild_id: GUILD.into(),
+            user_id: ALICE.into(),
+            nick: Some("ali".into()),
+            last_seen_at: at(9, 0),
+        },
+    )
+    .await
+    .unwrap();
+    let winner = |t| PickParts {
+        winner_team_id: Some(t),
+        maps: vec![MapPick {
+            map_number: 1,
+            winner_team_id: t,
+            rounds: None,
+            overtime: true,
+        }],
+        ..PickParts::default()
+    };
+    picks::save(&db.pool, GUILD, ALICE, s.bo3, &winner(s.team_a), at(12, 0))
+        .await
+        .unwrap();
+    picks::save(&db.pool, GUILD, BOB, s.bo3, &winner(s.team_b), at(12, 1))
+        .await
+        .unwrap();
+    picks::save(
+        &db.pool,
+        "100000000000000002",
+        BOB,
+        s.bo3,
+        &winner(s.team_a),
+        at(12, 2),
+    )
+    .await
+    .unwrap();
+
+    let all = picks::list_for_match_with_authors(&db.pool, GUILD, s.bo3)
+        .await
+        .unwrap();
+    assert_eq!(all.len(), 2, "other guild excluded");
+    assert_eq!(all[0].pick.user_id, ALICE);
+    assert_eq!(all[0].pick.parts, winner(s.team_a));
+    assert_eq!(
+        all[0].author,
+        picks::PickAuthor {
+            username: "alice".into(),
+            global_name: Some("Alice".into()),
+            nick: Some("ali".into()),
+            avatar_hash: Some("abc".into()),
+        }
+    );
+    assert_eq!(all[1].pick.user_id, BOB);
+    assert_eq!(all[1].author.username, format!("user{BOB}"));
+    assert_eq!(all[1].author.nick, None, "no member row");
+    assert_eq!((all[0].revisions, all[1].revisions), (1, 1));
+}
+
+#[tokio::test]
+async fn picks_of_a_user_latest_match_first() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    let later = matches::insert(
+        &db.pool,
+        &MatchFields::scheduled(
+            s.event,
+            Some(s.team_a),
+            Some(s.team_c),
+            MatchFormat::Bo1,
+            Some(at(21, 0)),
+        ),
+    )
+    .await
+    .unwrap();
+    let unscheduled = matches::insert(
+        &db.pool,
+        &MatchFields::scheduled(
+            s.event,
+            Some(s.team_b),
+            Some(s.team_c),
+            MatchFormat::Bo1,
+            None,
+        ),
+    )
+    .await
+    .unwrap();
+    let map_only = |t| PickParts {
+        maps: vec![MapPick {
+            map_number: 1,
+            winner_team_id: t,
+            rounds: Some((13, 2)),
+            overtime: false,
+        }],
+        ..PickParts::default()
+    };
+    for (m, t) in [
+        (unscheduled, s.team_b),
+        (s.bo3, s.team_a),
+        (later, s.team_a),
+    ] {
+        picks::save(&db.pool, GUILD, ALICE, m, &map_only(t), at(12, 0))
+            .await
+            .unwrap();
+    }
+    picks::save(&db.pool, GUILD, BOB, s.bo3, &map_only(s.team_b), at(12, 0))
+        .await
+        .unwrap();
+    picks::save(
+        &db.pool,
+        "100000000000000002",
+        ALICE,
+        s.bo3,
+        &map_only(s.team_b),
+        at(12, 0),
+    )
+    .await
+    .unwrap();
+
+    let mine = picks::list_for_user(&db.pool, GUILD, ALICE).await.unwrap();
+    assert_eq!(
+        mine.iter().map(|(p, _)| p.match_id).collect::<Vec<_>>(),
+        [later, s.bo3, unscheduled]
+    );
+    assert!(
+        mine.iter()
+            .all(|(p, n)| p.user_id == ALICE && p.guild_id == GUILD && *n == 1)
+    );
+    assert_eq!(mine[1].0.parts, map_only(s.team_a));
+
+    // A second save of the same pick counts as a revision.
+    picks::save(
+        &db.pool,
+        GUILD,
+        ALICE,
+        s.bo3,
+        &map_only(s.team_b),
+        at(12, 0),
+    )
+    .await
+    .unwrap();
+    let mine = picks::list_for_user(&db.pool, GUILD, ALICE).await.unwrap();
+    assert_eq!(mine[1].1, 2);
+    assert_eq!(
+        picks::count_revisions(&db.pool, mine[1].0.id)
+            .await
+            .unwrap(),
+        2
+    );
+}
+
+#[tokio::test]
+async fn revisions_of_a_match_are_grouped_by_pick() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    let winner = |t| PickParts {
+        winner_team_id: Some(t),
+        ..PickParts::default()
+    };
+    picks::save(&db.pool, GUILD, ALICE, s.bo3, &winner(s.team_a), at(12, 0))
+        .await
+        .unwrap();
+    picks::save(&db.pool, GUILD, BOB, s.bo3, &winner(s.team_b), at(12, 1))
+        .await
+        .unwrap();
+    picks::save(&db.pool, GUILD, ALICE, s.bo3, &winner(s.team_b), at(12, 2))
+        .await
+        .unwrap();
+    picks::save(
+        &db.pool,
+        "100000000000000002",
+        ALICE,
+        s.bo3,
+        &winner(s.team_a),
+        at(12, 3),
+    )
+    .await
+    .unwrap();
+
+    let revs = picks::list_revisions_for_match(&db.pool, GUILD, s.bo3)
+        .await
+        .unwrap();
+    let got: Vec<(&str, _, i64)> = revs
+        .iter()
+        .map(|(u, r)| {
+            (
+                u.as_str(),
+                r.edited_at,
+                r.snapshot["winner_team_id"].as_i64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        got,
+        [
+            (ALICE, at(12, 0), s.team_a.0),
+            (ALICE, at(12, 2), s.team_b.0),
+            (BOB, at(12, 1), s.team_b.0),
+        ]
     );
 }
 
