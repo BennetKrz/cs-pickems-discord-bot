@@ -1,0 +1,24 @@
+# Use an existing Traefik (v3) instead of the bundled Caddy: puts `app` on
+# Traefik's Docker network, nothing else. Setup: deploy/README.md, "Option B".
+#
+# B1, Traefik's Docker provider: add the router labels too.
+#   COMPOSE_PROFILES=
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml:docker-compose.traefik-labels.yml
+#
+# B2, your own Traefik config (file provider, e.g. traefik/pickem.yml):
+#   COMPOSE_PROFILES=
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml
+#
+# Traefik reaches the app as http://pickem-app:8080. Still no published
+# ports.
+
+services:
+  app:
+    networks:
+      - default
+      - traefik
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

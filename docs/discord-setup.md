@@ -29,7 +29,7 @@ The bot must be in the server: sign-in uses the bot token to check that the user
 1. **Activities → Settings**: turn on **Enable Activities**. Discord then creates the default *Entry Point* command ("Launch"); T08 builds on it.
 2. **Activities → Settings → Supported Platforms**: tick **Web**, **iOS** and **Android**. An unticked platform doesn't show the Activity at all, and members use the Discord mobile apps too.
 3. **Activities → URL Mappings**: add **Prefix** `/` and **Target** your host *without* `https://`:
-   - production: your public hostname, e.g. `pickem.example.com` (served by Caddy on the Pi, T16);
+   - production: your public hostname, e.g. `pickem.example.com` (served on the Pi through the bundled Caddy or your Traefik; see [deploy/README.md](../deploy/README.md));
    - development: the cloudflared tunnel host, e.g. `funky-jogging-bunny.trycloudflare.com` (see the README).
 
 No other mappings are needed. The Activity calls only its own origin: the API under `/api`, and avatars and team logos through the backend's image proxy (`/api/img/...`).

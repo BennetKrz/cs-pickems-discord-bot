@@ -16,7 +16,7 @@ The project owner set the requirements and answered the open design questions be
 4. **Stack:** a Rust backend (tokio, axum, poise, sqlx) as one binary, and a TypeScript frontend (React, Vite, Embedded App SDK).
 5. **Database:** SQLite in WAL mode via sqlx. PostgreSQL stays possible later.
 6. **Visibility:** all picks are visible to all server members, also before the lock.
-7. **Hosting:** the Raspberry Pi is reached through the owner's own domain, with ports 80/443 forwarded and Caddy handling TLS. No Cloudflare Tunnel.
+7. **Hosting:** the Raspberry Pi is reached through the owner's own domain, with ports 80/443 forwarded and Caddy handling TLS. No Cloudflare Tunnel. *(Amended by [ADR 0008](0008-container-image-and-proxy.md): Caddy is optional; an existing Traefik can terminate TLS instead.)*
 8. **Updates:** images go to GHCR, and the Watchtower fork `nickfedor/watchtower` updates them, because the original was archived in Dec 2025.
 9. **Wording:** the UI says *pick*, not *bet*. Points only, no money.
 

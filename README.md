@@ -13,7 +13,7 @@ A self-hosted Discord app for one server's Counter-Strike 2 pick'em. Members pic
 | --- | --- |
 | `backend/` | Cargo workspace. Crates in `backend/crates/`: `domain`, `store`, `sources`, `sync`, `api`, `bot`, and `app` (the binary) |
 | `frontend/` | The Activity: React + Vite + TypeScript, built to `frontend/dist` |
-| `deploy/` | Compose stack, Caddyfile, env examples (T16) |
+| `deploy/` | Compose stack, Caddyfile, Traefik overrides (network, labels) and snippet, env example (T16); setup in [deploy/README.md](deploy/README.md). The `Dockerfile` is at the repo root. |
 
 The backend is one binary. It serves the built frontend at `/`, the JSON API under `/api/*`, and `GET /healthz`.
 
@@ -186,3 +186,9 @@ cd frontend && pnpm lint && pnpm typecheck && pnpm test
 ```
 
 Tests never call real external APIs.
+
+## Deployment
+
+The `Dockerfile` (repo root) builds one image with the backend and the built Activity; `deploy/` runs it with docker compose on a Raspberry Pi, behind either the bundled Caddy or an existing Traefik. Setup, operations and hardening: [deploy/README.md](deploy/README.md). Decisions: [ADR 0008](docs/adr/0008-container-image-and-proxy.md).
+
+The image's health check is `app healthcheck`, which probes `GET /healthz` on `BIND_ADDR` and exits 0 only on 200.

@@ -16,3 +16,4 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | [0005](0005-manual-overrides-and-fixtures.md) | Manual overrides, admin match actions and dev fixtures | accepted |
 | [0006](0006-sync-scheduler-budget.md) | Sync scheduler and request budget | accepted |
 | [0007](0007-discord-auth-sessions.md) | Discord sign-in, sessions, admin check and image proxy | accepted |
+| [0008](0008-container-image-and-proxy.md) | Container image, optional Caddy or existing Traefik, rate limits | accepted |

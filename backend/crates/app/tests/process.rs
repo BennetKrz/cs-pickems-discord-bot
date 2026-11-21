@@ -152,6 +152,20 @@ fn serves_health_and_frontend_then_stops_cleanly_on_sigterm() {
     assert!(status.contains(" 200 "), "status: {status}");
     assert!(body.contains("pickem test"));
 
+    // T16: `app healthcheck` (the Docker HEALTHCHECK) succeeds with nothing
+    // but BIND_ADDR, also on a wildcard bind address.
+    let probe = base_command(dir.path())
+        .arg("healthcheck")
+        .env("BIND_ADDR", format!("0.0.0.0:{port}"))
+        .output()
+        .unwrap();
+    assert!(
+        probe.status.success(),
+        "healthcheck failed: {}",
+        String::from_utf8_lossy(&probe.stderr)
+    );
+    assert!(String::from_utf8_lossy(&probe.stdout).contains("200"));
+
     // AC3: SIGTERM ends the process within 10 s without errors.
     let killed = Command::new("kill")
         .args(["-TERM", &child.id().to_string()])
@@ -172,6 +186,25 @@ fn serves_health_and_frontend_then_stops_cleanly_on_sigterm() {
     for secret in ["test-secret", "test-bot-token", "test-pandascore-token"] {
         assert!(!log.contains(secret), "{secret} leaked:\n{log}");
     }
+}
+
+/// T16: `app healthcheck` fails (exit 1) when nothing answers, without
+/// needing any of the app's required configuration.
+#[test]
+fn healthcheck_fails_without_a_server() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = base_command(dir.path())
+        .args([
+            "healthcheck",
+            "--addr",
+            &format!("127.0.0.1:{}", free_port()),
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("cannot connect"), "{stderr}");
+    assert!(!stderr.contains("DISCORD_"), "{stderr}");
 }
 
 /// T03: `app reconcile --replay` rebuilds from `source_records` and exits,

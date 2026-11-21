@@ -8,7 +8,7 @@ Self-hosted Discord app for one server's Counter-Strike 2 pick'em: members predi
 - Architecture, data flow, invariants: `docs/architecture.md`
 - Tickets, build order and status: `docs/tickets/README.md`, one file per ticket in `docs/tickets/`
 - Decision records: `docs/adr/`
-- Code: `backend/` (Cargo workspace: `domain`, `store`, `sources`, `sync`, `api`, `bot`, `app`), `frontend/` (React + Vite + TS), `deploy/` (compose, Caddyfile, env examples)
+- Code: `backend/` (Cargo workspace: `domain`, `store`, `sources`, `sync`, `api`, `bot`, `app`), `frontend/` (React + Vite + TS), `deploy/` (compose, Caddyfile, Traefik overrides (network, labels) and snippet, env example; `Dockerfile` at the repo root)
 
 Read `docs/vision.md` and `docs/architecture.md` before your first change in a session, and the ticket you are working on before you start it.
 

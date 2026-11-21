@@ -1,0 +1,63 @@
+# CS2 Pick'em on a Raspberry Pi (T16). Setup: deploy/README.md.
+#
+#   cp .env.example .env   # fill it in
+#   mkdir -p data
+#   docker compose up -d
+#
+# Reverse proxy, chosen in .env:
+#   - bundled Caddy (default): COMPOSE_PROFILES=caddy
+#   - an existing Traefik:     COMPOSE_PROFILES= and COMPOSE_FILE with
+#                              docker-compose.traefik.yml (network), plus
+#                              docker-compose.traefik-labels.yml for labels
+#
+# `app` publishes no ports. Only the reverse proxy is reachable.
+
+name: cs2-pickem
+
+services:
+  app:
+    image: ${APP_IMAGE:?set APP_IMAGE in .env}:${IMAGE_TAG:-latest}
+    # A stable name on shared networks (the Traefik file-provider snippet
+    # points at it).
+    container_name: pickem-app
+    # The owner of ./data on the host (the Pi user is usually 1000).
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    env_file: .env
+    volumes:
+      # SQLite database (pickem.db) and the image cache.
+      - ./data:/data
+    restart: unless-stopped
+    # The app shuts down within 8 s; leave room.
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      # Watchtower (T17) runs in label-enable mode and updates only this.
+      com.centurylinklabs.watchtower.enable: "true"
+    # Health: the image's HEALTHCHECK runs `app healthcheck`.
+
+  caddy:
+    profiles: ["caddy"]
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and ACME account; keep them across restarts to stay
+      # clear of Let's Encrypt rate limits.
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

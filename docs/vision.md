@@ -31,7 +31,7 @@ Optional extras P1–P7 are listed in [tickets/README.md](tickets/README.md).
 
 | Topic | Decision | Consequence for implementation |
 | --- | --- | --- |
-| UI | A Discord **Activity** holds all screens. The bot handles slash commands and channel posts. | Needs a public HTTPS origin: the owner's domain, ports 80/443 forwarded to the Pi, TLS terminated by Caddy. |
+| UI | A Discord **Activity** holds all screens. The bot handles slash commands and channel posts. | Needs a public HTTPS origin: the owner's domain, ports 80/443 forwarded to the Pi, TLS terminated by the bundled Caddy or an existing Traefik (T16, [ADR 0008](adr/0008-container-image-and-proxy.md)). |
 | Identity | A Discord account is the only account. No passwords, no sign-up. | OAuth2 through the Embedded App SDK, verified server-side. |
 | Match scope | Only events that admins **follow** are synced and can be picked. | Keeps API quota low; brackets exist per followed event. |
 | Pick lock | Picks can be created, edited and deleted until the match starts; then every part locks. | No per-map live locking. Live polling is only needed for scores. |

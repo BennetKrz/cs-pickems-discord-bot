@@ -15,7 +15,7 @@ flowchart LR
     end
 
     subgraph pi["Raspberry Pi · docker compose"]
-        caddy["Caddy<br/>TLS on own domain (80/443)"]
+        proxy["Reverse proxy: bundled Caddy<br/>or existing Traefik<br/>TLS on own domain (80/443)"]
         subgraph app["app · one Rust binary"]
             bot["Bot (poise)<br/>commands, posts"]
             api["HTTP API (axum)<br/>serves the frontend"]
@@ -31,8 +31,8 @@ flowchart LR
         ghcr["GHCR<br/>image registry"]
     end
 
-    client -- "HTTPS via Discord proxy" --> caddy
-    caddy --> api
+    client -- "HTTPS via Discord proxy" --> proxy
+    proxy --> api
     bot --> dapi
     sync --> ps
     sync --> rec
@@ -82,11 +82,13 @@ The canonical schema is specified in [T02](tickets/T02-domain-model-database.md)
 
 ## Deployment
 
-- Three compose services on the Pi (T16):
+- Compose services on the Pi (T16, [ADR 0008](adr/0008-container-image-and-proxy.md), setup in [deploy/README.md](../deploy/README.md)):
   - `app`, with no published ports;
-  - `caddy`, publishing 80/443 with automatic Let's Encrypt certificates;
+  - the reverse proxy, either:
+    - `caddy` (compose profile `caddy`, the default), publishing 80/443 with automatic Let's Encrypt certificates; or
+    - an **existing Traefik** outside this stack: `docker-compose.traefik.yml` attaches `app` to Traefik's network, and the route comes from `docker-compose.traefik-labels.yml` (Docker labels) or `traefik/pickem.yml` (Traefik's file provider);
   - `watchtower`, updating only the labeled `app` container (T17).
-- The Discord Activity URL mapping `/` points to the owner's domain. Discord's proxy forwards Activity requests to Caddy.
+- The Discord Activity URL mapping `/` points to the owner's domain. Discord's proxy forwards Activity requests to the reverse proxy, which forwards them to `app:8080`.
 - Images are built in GitHub Actions for arm64 (cross-compiled, not under QEMU) and pushed to GHCR. Watchtower polls the configured tag.
 
 ## Risks
@@ -96,7 +98,7 @@ The canonical schema is specified in [T02](tickets/T02-domain-model-database.md)
 | PandaScore's free plan lacks per-map round scores or live data | Exact map-score picks can't be settled automatically | **Confirmed by the T04 spike ([ADR 0001](adr/0001-pandascore-coverage.md)): no round scores or map names on the free plan.** Manual entry (T05); pending-then-void rule (T11); a second adapter later. Liquipedia's API asks for a named User-Agent and has usage terms. HLTV has no official API; scraping it is fragile and likely against its terms. |
 | Discord Activity APIs change (Entry Point command, launch response, launch parameters) | Launch buttons or deep links break | T08 checks current docs; the pending-view deep link needs no special API. |
 | Discord limits unverified Activities to the app's team and app testers, in servers under 25 members | Most members of a larger server can't open the Activity | Checked in T07 ([discord-setup.md](discord-setup.md#who-can-launch-it)); open question in [vision.md](vision.md#open-questions): app verification, or app testers for small groups. |
-| Public URL for the Pi | The Activity can't load without HTTPS | Own domain, ports 80/443 forwarded, Caddy with automatic certificates; only Caddy is exposed and the host is hardened (T16). DS-Lite or CGNAT connections can't forward IPv4 ports. Use DynDNS if the IP changes. |
+| Public URL for the Pi | The Activity can't load without HTTPS | Own domain, ports 80/443 forwarded, the bundled Caddy or an existing Traefik with automatic certificates; only the reverse proxy is exposed and the host is hardened (T16). DS-Lite or CGNAT connections can't forward IPv4 ports. Use DynDNS if the IP changes. |
 | Unattended updates by Watchtower | A bad release goes live by itself | CI gates, backward-compatible migrations, `IMAGE_TAG` pinning for rollback, backups (P4). |
 | SD-card wear and corruption | Data loss | SSD recommended (T16), backups (P4). |
 

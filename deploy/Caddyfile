@@ -1,0 +1,25 @@
+# Bundled reverse proxy (compose profile `caddy`). Caddy gets and renews a
+# Let's Encrypt certificate for $DOMAIN by itself; ports 80 and 443 must be
+# reachable from the Internet. Keep the headers in sync with
+# docker-compose.traefik-labels.yml and traefik/pickem.yml.
+
+{$DOMAIN} {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+		# No X-Frame-Options or frame-ancestors: Discord shows the Activity
+		# in an iframe.
+	}
+
+	# Access log as JSON on stdout: `docker compose logs caddy`.
+	log {
+		output stdout
+		format json
+	}
+
+	# No `encode`: compression would alter the API's ETags, and the
+	# responses are small.
+	reverse_proxy app:8080
+}
