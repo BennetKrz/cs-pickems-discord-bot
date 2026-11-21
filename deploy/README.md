@@ -9,7 +9,7 @@ In both cases `app` publishes no port. Discord's proxy reaches the Activity thro
 
 | File | Purpose |
 | --- | --- |
-| `docker-compose.yml` | `app`, plus `caddy` in the compose profile `caddy` |
+| `docker-compose.yml` | `app` and `watchtower` (automatic updates), plus `caddy` in the compose profile `caddy` |
 | `Caddyfile` | Option A: TLS, security headers, access log |
 | `docker-compose.traefik.yml` | Option B: puts `app` on Traefik's network, nothing else |
 | `docker-compose.traefik-labels.yml` | Option B1: router, headers and service as Docker labels |
@@ -53,7 +53,15 @@ Fill in `.env`:
 - the Discord values and `PANDASCORE_TOKEN`;
 - `APP_UID`/`APP_GID`: the output of `id -u` and `id -g`, usually 1000.
 
-If a secret contains `$`, wrap the value in single quotes. If the GHCR package is private, run `docker login ghcr.io` once with a token that has `read:packages`.
+If a secret contains `$`, wrap the value in single quotes.
+
+**Registry login.** The image on GHCR is private, so the Pi needs a read-only token. On GitHub, create a classic personal access token (**Settings → Developer settings → Personal access tokens → Tokens (classic)**) with only the `read:packages` scope. Then log in once, as the user that runs `docker compose`:
+
+```sh
+docker login ghcr.io -u <github-user>   # paste the token as the password
+```
+
+This writes `~/.docker/config.json`. `docker compose pull` uses it, and Watchtower gets the same file mounted read-only. If the file is somewhere else (for example because you run compose with `sudo`), set `DOCKER_CONFIG_FILE` in `.env`.
 
 ### Option A: bundled Caddy
 
@@ -105,8 +113,10 @@ Then open the Activity from your Discord server.
 | --- | --- |
 | Logs (JSON) | `docker compose logs -f app` (Caddy's access log: `docker compose logs -f caddy`) |
 | Health | `docker compose ps`, or `docker inspect -f '{{.State.Health.Status}}' pickem-app` |
-| Update now | `docker compose pull && docker compose up -d` (Watchtower does this automatically, T17) |
-| Roll back | set `IMAGE_TAG=sha-<short>` in `.env`, then `docker compose up -d`. Back to `latest` when fixed. |
+| Update now | `docker compose pull && docker compose up -d` (Watchtower does this within 5 min anyway, see below) |
+| Roll back | set `IMAGE_TAG=sha-<short>` in `.env`, then `docker compose up -d`. This also pauses automatic updates. Back to `latest` when fixed. |
+| Pause updates | `docker compose stop watchtower` (`start` resumes), or pin `IMAGE_TAG` as for a rollback |
+| Update log | `docker compose logs -f watchtower` |
 | Restart | `docker compose restart app` (graceful, within 8 s) |
 | Stop everything | `docker compose down` (the data in `./data` stays) |
 | Back up by hand | `docker compose stop app && cp -a data data.bak-$(date +%F) && docker compose start app` (automatic backups: P4) |
@@ -119,7 +129,27 @@ Then open the Activity from your Discord server.
 | 404 with an empty body | The path doesn't exist (e.g. a typo in `/healthz`). Only `/`, the frontend files, `/healthz` and `/api/*` exist. |
 | Traefik answers 404 with no request in its access log for `cs2-pickem@…` | No router matches: check `DOMAIN` (B1) or the host in your dynamic config (B2), and that Traefik and `pickem-app` share `TRAEFIK_NETWORK`. |
 
+| `docker compose up` fails with `bind source path does not exist: …/.docker/config.json` | Run `docker login ghcr.io` first (section 3), or point `DOCKER_CONFIG_FILE` in `.env` to your Docker `config.json`. |
+| Watchtower logs `unauthorized` or `denied` for `ghcr.io` | The token in `config.json` expired or lacks `read:packages`. Log in again; Watchtower reads the file on every check. |
+
 The SQLite database is `data/pickem.db` (with `-wal` and `-shm` while running). The image cache is `data/img-cache` and can be deleted at any time.
+
+### Automatic updates (Watchtower)
+
+Every green push to `main` builds a new image in GitHub Actions and pushes it to GHCR (`.github/workflows/ci.yml`). The `watchtower` container checks GHCR every 5 minutes. When the image behind `IMAGE_TAG` has changed, it pulls it, stops `app` gracefully, starts it again with the same settings, and removes the old image. `/healthz` then shows the new `git_sha`. Expect a merge to be live within about 20 minutes (CI run plus one check).
+
+- **What it touches:** only containers labeled both `com.centurylinklabs.watchtower.enable=true` and `com.centurylinklabs.watchtower.scope=cs2-pickem`, which is `app` alone. Caddy, your Traefik, other stacks (even ones with their own Watchtower labels) and Watchtower itself are never updated. Bump Watchtower's version in `docker-compose.yml` by hand.
+- **Channels** (`IMAGE_TAG` in `.env`):
+
+  | `IMAGE_TAG` | What ships |
+  | --- | --- |
+  | `latest` (default) | every merge to `main` |
+  | `stable` | only releases: the tag moves when a `vX.Y.Z` git tag is pushed (not for pre-releases like `v1.2.0-rc.1`) |
+  | `vX.Y.Z` or `sha-<short>` | nothing; a fixed build, as for a rollback |
+
+  To release: set `version` in `backend/Cargo.toml` (`[workspace.package]`) to `X.Y.Z` on `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. CI refuses a tag that doesn't match.
+- **Notifications (optional):** set `WATCHTOWER_NOTIFICATION_URL` in `.env` to a shoutrrr URL ([Watchtower notifications](https://watchtower.nickfedor.com/v1.24.1/configuration/notifications/)), then `docker compose up -d`. For a Discord webhook `https://discord.com/api/webhooks/<id>/<token>`, the URL is `discord://<token>@<id>`.
+- **Database:** migrations stay backward-compatible for one release ([ADR 0003](../docs/adr/0003-database-schema.md)), so an automatic update or a rollback to the previous build never breaks the database.
 
 ## 6. Hardening
 
@@ -155,7 +185,7 @@ docker buildx build --load -t cs2-pickem:dev --build-arg GIT_SHA=$(git rev-parse
 cd deploy && cp .env.example .env && mkdir -p data
 # .env: DOMAIN=localhost, APP_IMAGE=cs2-pickem, IMAGE_TAG=dev, APP_UID/GID=$(id -u)/$(id -g),
 #       placeholder Discord values, ENABLED_SOURCES=manual
-docker compose up -d --wait
+docker compose up -d --wait app caddy   # Watchtower can't update a local image
 curl -k https://localhost/healthz
 ```
 

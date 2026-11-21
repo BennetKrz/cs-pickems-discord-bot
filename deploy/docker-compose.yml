@@ -11,6 +11,9 @@
 #                              docker-compose.traefik-labels.yml for labels
 #
 # `app` publishes no ports. Only the reverse proxy is reachable.
+#
+# Watchtower (T17) updates `app` when a new image is pushed for IMAGE_TAG.
+# It needs `docker login ghcr.io` on the host first (README.md, section 3).
 
 name: cs2-pickem
 
@@ -34,8 +37,10 @@ services:
         limits:
           memory: 256M
     labels:
-      # Watchtower (T17) runs in label-enable mode and updates only this.
+      # Watchtower (T17) runs in label-enable mode with a scope: it updates
+      # only containers with both labels, i.e. this one.
       com.centurylinklabs.watchtower.enable: "true"
+      com.centurylinklabs.watchtower.scope: cs2-pickem
     # Health: the image's HEALTHCHECK runs `app healthcheck`.
 
   caddy:
@@ -57,6 +62,41 @@ services:
       # clear of Let's Encrypt rate limits.
       - caddy_data:/data
       - caddy_config:/config
+
+  # Pulls new `app` images and recreates the container (T17). Updates only
+  # containers labeled `watchtower.enable=true` *and* `watchtower.scope=
+  # cs2-pickem`, so Caddy, an existing Traefik and other stacks are never
+  # touched. Itself it carries no enable label: bump its version by hand.
+  watchtower:
+    image: nickfedor/watchtower:1.24.1
+    restart: unless-stopped
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_SCOPE: cs2-pickem
+      WATCHTOWER_POLL_INTERVAL: "300"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_NO_STARTUP_MESSAGE: "true"
+      # Optional shoutrrr URL, e.g. discord://<token>@<webhook-id>.
+      WATCHTOWER_NOTIFICATION_URL: ${WATCHTOWER_NOTIFICATION_URL:-}
+      # Registry credentials: the mounted config.json below.
+      DOCKER_CONFIG: /
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The GHCR package is private: the Pi's `docker login ghcr.io`
+      # credentials (a read:packages token), read-only. Fails instead of
+      # creating a directory if the file doesn't exist yet.
+      - type: bind
+        source: ${DOCKER_CONFIG_FILE:-${HOME}/.docker/config.json}
+        target: /config.json
+        read_only: true
+        bind:
+          create_host_path: false
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    labels:
+      com.centurylinklabs.watchtower.scope: cs2-pickem
 
 volumes:
   caddy_data:

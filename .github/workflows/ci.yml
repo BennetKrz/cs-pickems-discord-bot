@@ -1,0 +1,142 @@
+# CI/CD (T17, docs/adr/0009-ci-cd-and-watchtower.md).
+#
+# - Pull requests: the quality gates (backend, frontend incl. build).
+# - main, v* tags and manual runs: the same gates, then the multi-arch image
+#   to GHCR. `image` needs both gate jobs, so nothing is pushed if one fails.
+#
+# Tags: `latest` (main), `sha-<7>` (every push, = git_sha in /healthz),
+# `vX.Y.Z` and `stable` (release tags; `stable` skips pre-releases).
+# Watchtower on the Pi follows IMAGE_TAG (deploy/README.md).
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Superseded PR runs are cancelled; pushes to main and tags always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  IMAGE_NAME: cs2-pickem
+
+jobs:
+  backend:
+    name: backend (fmt, clippy, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+          rustc --version
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  frontend:
+    name: frontend (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  image:
+    name: image (build and push)
+    if: github.event_name != 'pull_request'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # /healthz reports the workspace version; a release tag must match it.
+      - name: Check tag against the workspace version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' backend/Cargo.toml)"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} doesn't match the workspace version ${version} in backend/Cargo.toml"
+            exit 1
+          fi
+
+      - name: Image name and git sha
+        id: vars
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # Both platforms build on this amd64 runner: the Dockerfile cross-compiles
+      # Rust and runs every build stage on $BUILDPLATFORM, so no QEMU.
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.vars.outputs.image }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern=v{{version}}
+            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+          labels: |
+            org.opencontainers.image.title=cs2-pickem
+            org.opencontainers.image.description=Self-hosted Counter-Strike 2 pick'em for one Discord server
+            org.opencontainers.image.licenses=MIT
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/arm64,linux/amd64
+          build-args: |
+            GIT_SHA=${{ steps.vars.outputs.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
