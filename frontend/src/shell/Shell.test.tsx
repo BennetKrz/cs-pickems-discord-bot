@@ -17,16 +17,27 @@ function renderShell(me: Me = ME, path = '/') {
 
 describe('Shell', () => {
   beforeEach(() => {
-    mockFetch((url) =>
-      url.startsWith('/api/matches?')
-        ? fakeResponse(200, {
-            state: 'upcoming',
-            following_any: true,
-            matches: [],
-            next_cursor: null,
-          })
-        : fakeResponse(304),
-    )
+    mockFetch((url) => {
+      if (url.startsWith('/api/matches?')) {
+        return fakeResponse(200, {
+          state: 'upcoming',
+          following_any: true,
+          matches: [],
+          next_cursor: null,
+        })
+      }
+      if (url.startsWith('/api/leaderboard')) {
+        return fakeResponse(200, {
+          event_id: null,
+          events: [],
+          match_day: null,
+          has_previous: false,
+          live: false,
+          rows: [],
+        })
+      }
+      return fakeResponse(304)
+    })
   })
 
   it("shows the member's name and avatar", () => {

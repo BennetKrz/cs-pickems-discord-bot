@@ -250,6 +250,53 @@ export function matchPath(matchId: number): string {
   return `/api/matches/${matchId}`
 }
 
+// ---- leaderboard (T14) ------------------------------------------------------
+
+/** One member on the leaderboard. */
+export interface LeaderboardRow {
+  /** 1-based; equal members share a rank and the next one skips (1, 1, 3). */
+  rank: number
+  /** The rank before the latest match day; `null` if the member had none. */
+  previous_rank: number | null
+  user_id: string
+  display_name: string
+  avatar_url: string
+  /** All points, provisional ones included. */
+  points: number
+  /** The part of `points` from live matches. */
+  provisional_points: number
+  /** Picks on live matches; their points can still move. */
+  provisional_picks: number
+  /** Picks with a result that is not void. */
+  settled_picks: number
+  winner_hits: number
+  winner_decided: number
+  /** 0–1; `null` before any winner pick is decided. */
+  winner_accuracy: number | null
+  series_hits: number
+  map_hits: number
+}
+
+/** Answer of `GET /api/leaderboard`. */
+export interface Leaderboard {
+  /** The event filter; `null` for all time. */
+  event_id: number | null
+  /** The events the server follows, for the filter. */
+  events: Named[]
+  /** The latest match day (`YYYY-MM-DD`, server time zone). */
+  match_day: string | null
+  /** Rank changes are meaningful: someone ranked before `match_day`. */
+  has_previous: boolean
+  /** A match is live: points can still move. */
+  live: boolean
+  rows: LeaderboardRow[]
+}
+
+/** Path of the leaderboard, all time or for one event. */
+export function leaderboardPath(eventId: number | null = null): string {
+  return eventId === null ? '/api/leaderboard' : `/api/leaderboard?event_id=${eventId}`
+}
+
 /** Error codes of the pick API. */
 export const PICK_LOCKED = 'pick_locked'
 export const NOT_PICKABLE = 'not_pickable'

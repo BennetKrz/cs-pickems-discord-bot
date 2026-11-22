@@ -215,9 +215,14 @@ async fn top_pickers_by_points_with_names() {
     assert_eq!(top.len(), 1, "zero points don't count: {top:?}");
     assert_eq!((top[0].display_name.as_str(), top[0].points), ("Ali", 5));
 
-    let names = bot::display_names(&db.pool, GUILD, &[ALICE.into(), BOB.into()])
-        .await
-        .unwrap();
+    // `/leaderboard` names members like the top pickers (T14).
+    let names: Vec<(String, String)> =
+        store::leaderboard::members(&db.pool, GUILD, &[ALICE.into(), BOB.into()])
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|m| (m.user_id, m.display_name))
+            .collect();
     assert_eq!(
         names,
         vec![

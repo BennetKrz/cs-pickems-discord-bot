@@ -765,6 +765,7 @@ name = "domain"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "chrono-tz",
  "serde",
  "serde_json",
 ]
@@ -2885,6 +2886,7 @@ name = "store"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "chrono-tz",
  "domain",
  "serde_json",
  "sqlx",
