@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import type { MatchRow as Row } from '../api.ts'
+import type { MatchHeader, MatchRow as Row } from '../api.ts'
 import {
   COUNTDOWN_WINDOW_MS,
   formatCountdown,
@@ -48,7 +48,7 @@ function Center({ row }: { row: Row }) {
 }
 
 /** The status tag: live badge, lock countdown, or state. Also used in brackets (T13). */
-export function StatusTag({ row, now }: { row: Row; now: number }) {
+export function StatusTag({ row, now }: { row: MatchHeader; now: number }) {
   if (row.voided) return <span className="tag tag-muted">Void</span>
   switch (row.status) {
     case 'live':

@@ -218,11 +218,11 @@ fn invalid_query(message: impl Into<String>) -> ApiError {
 }
 
 /// The cursor is `<sort time in ms>_<match id>`; clients treat it as opaque.
-fn encode_cursor(at: DateTime<Utc>, id: MatchId) -> String {
+pub(crate) fn encode_cursor(at: DateTime<Utc>, id: MatchId) -> String {
     format!("{}_{}", at.timestamp_millis(), id.0)
 }
 
-fn decode_cursor(s: &str) -> Option<(DateTime<Utc>, MatchId)> {
+pub(crate) fn decode_cursor(s: &str) -> Option<(DateTime<Utc>, MatchId)> {
     let (ms, id) = s.split_once('_')?;
     let at = DateTime::from_timestamp_millis(ms.parse().ok()?)?;
     Some((at, MatchId(id.parse().ok()?)))
@@ -401,17 +401,18 @@ impl RowContext {
     }
 }
 
-fn row(
+/// The header of a listed match with its `maps`; `followed` says whether
+/// the guild follows its event (else it is not pickable). Shared with the
+/// pick history (T15).
+pub(crate) fn item_header(
     item: &MatchListItem,
-    maps: &HashMap<MatchId, Vec<MatchMap>>,
-    mine: &HashMap<MatchId, (domain::Pick, Option<PickResult>)>,
+    maps: &[MatchMap],
     followed: bool,
     now: DateTime<Utc>,
-) -> MatchRow {
-    let m = &item.m;
-    let f = &m.fields;
-    let header = header(HeaderParts {
-        m,
+) -> MatchHeader {
+    let f = &item.m.fields;
+    header(HeaderParts {
+        m: &item.m,
         event: Named {
             id: f.event_id.0,
             name: item.event_name.clone(),
@@ -422,11 +423,28 @@ fn row(
             .map(|(id, name)| Named { id: id.0, name }),
         team_a: item.team_a.as_ref(),
         team_b: item.team_b.as_ref(),
-        maps: maps.get(&m.id).map_or(&[], Vec::as_slice),
+        maps,
         pick_count: item.pick_count,
         followed,
         now,
-    });
+    })
+}
+
+fn row(
+    item: &MatchListItem,
+    maps: &HashMap<MatchId, Vec<MatchMap>>,
+    mine: &HashMap<MatchId, (domain::Pick, Option<PickResult>)>,
+    followed: bool,
+    now: DateTime<Utc>,
+) -> MatchRow {
+    let m = &item.m;
+    let f = &m.fields;
+    let header = item_header(
+        item,
+        maps.get(&m.id).map_or(&[], Vec::as_slice),
+        followed,
+        now,
+    );
     let (my_pick, my_result) = match mine.get(&m.id) {
         Some((p, r)) => (
             rules::completeness(f.format, &p.parts).into(),

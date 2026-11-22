@@ -297,6 +297,86 @@ export function leaderboardPath(eventId: number | null = null): string {
   return eventId === null ? '/api/leaderboard' : `/api/leaderboard?event_id=${eventId}`
 }
 
+// ---- profiles (T15) ---------------------------------------------------------
+
+/** Hits among the decided (hit or miss) parts of one kind. */
+export interface Accuracy {
+  hits: number
+  decided: number
+  /** 0–1; `null` before any part is decided. */
+  rate: number | null
+}
+
+/** Answer of `GET /api/users/{id}/profile`; the numbers equal the leaderboard's. */
+export interface Profile {
+  user_id: string
+  display_name: string
+  avatar_url: string
+  /** The caller's own profile. */
+  is_me: boolean
+  /** The event filter; `null` for all time. */
+  event_id: number | null
+  /** The events the server follows, for the filter. */
+  events: Named[]
+  /** Leaderboard rank; `null` without a settled pick. */
+  rank: number | null
+  previous_rank: number | null
+  points: number
+  provisional_points: number
+  provisional_picks: number
+  /** Picks with a result that is not void (the leaderboard's number). */
+  settled_picks: number
+  /** Pending and void parts, and void picks, don't count. */
+  accuracy: {
+    winner: Accuracy
+    series: Accuracy
+    map_winner: Accuracy
+    map_score: Accuracy
+  }
+  /** Picks per list, for the filter. */
+  picks: { open: number; live: number; settled: number; total: number }
+  /** A picked match is live: points can still move. */
+  live: boolean
+}
+
+/** A list of a member's picks. */
+export type ProfileSegment = 'open' | 'live' | 'settled'
+
+/** One picked match in a member's history. */
+export interface ProfilePick {
+  match: MatchHeader
+  pick: SavedPickParts
+  updated_at: string
+  /** `null` until settlement ran for the match. */
+  result: PickResult | null
+}
+
+/** Answer of `GET /api/users/{id}/picks`. */
+export interface ProfilePicks {
+  state: ProfileSegment
+  picks: ProfilePick[]
+  /** For the next page; `null` on the last. */
+  next_cursor: string | null
+}
+
+/** Path of a member's profile, all time or for one event. */
+export function profilePath(userId: string, eventId: number | null = null): string {
+  const base = `/api/users/${encodeURIComponent(userId)}/profile`
+  return eventId === null ? base : `${base}?event_id=${eventId}`
+}
+
+/** Path of one list of a member's picks. */
+export function profilePicksPath(
+  userId: string,
+  state: ProfileSegment,
+  opts: { eventId?: number | null; cursor?: string | null } = {},
+): string {
+  const q = new URLSearchParams({ state })
+  if (opts.eventId !== undefined && opts.eventId !== null) q.set('event_id', String(opts.eventId))
+  if (opts.cursor) q.set('cursor', opts.cursor)
+  return `/api/users/${encodeURIComponent(userId)}/picks?${q.toString()}`
+}
+
 // ---- events (T13) -----------------------------------------------------------
 
 export type EventStatus = 'upcoming' | 'running' | 'finished' | 'canceled'

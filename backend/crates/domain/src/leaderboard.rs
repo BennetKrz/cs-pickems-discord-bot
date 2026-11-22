@@ -21,7 +21,7 @@ use chrono_tz::Tz;
 
 use crate::localtime;
 use crate::model::ResultState;
-use crate::scoring::{Breakdown, Outcome};
+use crate::scoring::{Breakdown, Outcome, PartScore};
 
 /// One settled pick, as the leaderboard needs it.
 #[derive(Debug, Clone, PartialEq)]
@@ -52,12 +52,21 @@ pub struct Standing {
     pub winner_decided: u32,
     /// Exact series scores.
     pub series_hits: u32,
+    /// Series parts that are hit or miss.
+    pub series_decided: u32,
+    /// Correct map winners.
+    pub map_winner_hits: u32,
+    /// Map winner parts that are hit or miss.
+    pub map_winner_decided: u32,
     /// Exact map scores (or correct overtime winners).
     pub map_hits: u32,
+    /// Map score parts that are hit or miss.
+    pub map_score_decided: u32,
 }
 
 impl Standing {
-    fn new(user_id: &str) -> Self {
+    /// A member without any result.
+    pub fn new(user_id: &str) -> Self {
         Self {
             user_id: user_id.to_owned(),
             points: 0,
@@ -67,7 +76,11 @@ impl Standing {
             winner_hits: 0,
             winner_decided: 0,
             series_hits: 0,
+            series_decided: 0,
+            map_winner_hits: 0,
+            map_winner_decided: 0,
             map_hits: 0,
+            map_score_decided: 0,
         }
     }
 
@@ -78,8 +91,22 @@ impl Standing {
 
     /// Share of decided winner parts that hit; `None` before any is decided.
     pub fn winner_accuracy(&self) -> Option<f64> {
-        (self.winner_decided > 0)
-            .then(|| f64::from(self.winner_hits) / f64::from(self.winner_decided))
+        rate(self.winner_hits, self.winner_decided)
+    }
+
+    /// Share of decided series parts with the exact score (T15).
+    pub fn series_accuracy(&self) -> Option<f64> {
+        rate(self.series_hits, self.series_decided)
+    }
+
+    /// Share of decided map winner parts that hit (T15).
+    pub fn map_winner_accuracy(&self) -> Option<f64> {
+        rate(self.map_winner_hits, self.map_winner_decided)
+    }
+
+    /// Share of decided map score parts that hit (T15).
+    pub fn map_score_accuracy(&self) -> Option<f64> {
+        rate(self.map_hits, self.map_score_decided)
     }
 
     fn add(&mut self, p: &ScoredPick) {
@@ -93,23 +120,34 @@ impl Standing {
         }
         self.settled_picks += 1;
         let b = &p.breakdown;
-        match b.winner.map(|w| w.outcome) {
-            Some(Outcome::Hit) => {
-                self.winner_hits += 1;
-                self.winner_decided += 1;
-            }
-            Some(Outcome::Miss) => self.winner_decided += 1,
-            _ => {}
+        count(b.winner, &mut self.winner_hits, &mut self.winner_decided);
+        count(b.series, &mut self.series_hits, &mut self.series_decided);
+        for m in &b.maps {
+            count(
+                Some(m.winner),
+                &mut self.map_winner_hits,
+                &mut self.map_winner_decided,
+            );
+            count(m.score, &mut self.map_hits, &mut self.map_score_decided);
         }
-        if b.series.is_some_and(|s| s.outcome == Outcome::Hit) {
-            self.series_hits += 1;
+    }
+}
+
+/// `hits / decided`; `None` before any part is decided.
+pub fn rate(hits: u32, decided: u32) -> Option<f64> {
+    (decided > 0).then(|| f64::from(hits) / f64::from(decided))
+}
+
+/// Counts one part: `hit` and `miss` are decided; `pending`, `void` and a
+/// missing part count neither way.
+fn count(part: Option<PartScore>, hits: &mut u32, decided: &mut u32) {
+    match part.map(|p| p.outcome) {
+        Some(Outcome::Hit) => {
+            *hits += 1;
+            *decided += 1;
         }
-        let maps = b
-            .maps
-            .iter()
-            .filter(|m| m.score.is_some_and(|s| s.outcome == Outcome::Hit))
-            .count();
-        self.map_hits += u32::try_from(maps).unwrap_or(u32::MAX);
+        Some(Outcome::Miss) => *decided += 1,
+        Some(Outcome::Pending | Outcome::Void) | None => {}
     }
 }
 
@@ -251,7 +289,7 @@ mod tests {
     use chrono::TimeZone;
 
     use super::*;
-    use crate::scoring::{MapScore, PartScore};
+    use crate::scoring::MapScore;
 
     fn part(outcome: Outcome, points: u32) -> PartScore {
         PartScore { outcome, points }
@@ -437,11 +475,19 @@ mod tests {
                 winner_hits: 1,
                 winner_decided: 2,
                 series_hits: 1,
+                series_decided: 2,
+                // `bd` gives every map a winner hit: 3 + 1 + 1 + 1 maps.
+                map_winner_hits: 6,
+                map_winner_decided: 6,
                 map_hits: 2,
+                map_score_decided: 3,
             }]
         );
         assert_eq!(t[0].exact_hits(), 3);
         assert_eq!(t[0].winner_accuracy(), Some(0.5));
+        assert_eq!(t[0].series_accuracy(), Some(0.5));
+        assert_eq!(t[0].map_winner_accuracy(), Some(1.0));
+        assert_eq!(t[0].map_score_accuracy(), Some(2.0 / 3.0));
     }
 
     #[test]
@@ -458,6 +504,57 @@ mod tests {
         assert_eq!(t[0].settled_picks, 1);
         assert_eq!(t[0].points, 3);
         assert_eq!(Standing::new("x").winner_accuracy(), None);
+    }
+
+    #[test]
+    fn accuracy_per_part_skips_pending_void_parts_and_void_results() {
+        use Outcome::*;
+        let maps = |winners: &[Outcome]| {
+            winners
+                .iter()
+                .enumerate()
+                .map(|(i, &w)| MapScore {
+                    map_number: u8::try_from(i + 1).unwrap(),
+                    winner: part(w, 1),
+                    score: None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let picks = [
+            pick(
+                "a",
+                1,
+                ResultState::Final,
+                Breakdown {
+                    winner: None,
+                    series: None,
+                    maps: maps(&[Hit, Miss, Pending, Void]),
+                },
+            ),
+            // A void result counts for nothing, even with hits in it.
+            pick(
+                "a",
+                0,
+                ResultState::Void,
+                Breakdown {
+                    winner: Some(part(Hit, 3)),
+                    series: Some(part(Hit, 3)),
+                    maps: maps(&[Hit, Hit]),
+                },
+            ),
+        ];
+        let t = tally(&picks);
+        let s = &t[0];
+        assert_eq!((s.map_winner_hits, s.map_winner_decided), (1, 2));
+        assert_eq!(s.map_winner_accuracy(), Some(0.5));
+        assert_eq!((s.winner_hits, s.winner_decided), (0, 0));
+        assert_eq!((s.series_hits, s.series_decided), (0, 0));
+        assert_eq!(s.winner_accuracy(), None);
+        assert_eq!(s.series_accuracy(), None);
+        assert_eq!(s.map_score_accuracy(), None);
+        assert_eq!(s.settled_picks, 1);
+        assert_eq!(rate(0, 0), None);
+        assert_eq!(rate(3, 4), Some(0.75));
     }
 
     fn utc(y: i32, mo: u32, d: u32, h: u32) -> DateTime<Utc> {

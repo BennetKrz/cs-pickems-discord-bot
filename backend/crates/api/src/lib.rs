@@ -12,6 +12,8 @@
 //!   event with its stages, brackets and standings (T13), see [`events`].
 //! - `GET /api/leaderboard?event_id=` – the server leaderboard (T14), see
 //!   [`leaderboard`].
+//! - `GET /api/users/{id}/profile`, `GET /api/users/{id}/picks` – a
+//!   member's profile and pick history (T15), see [`profile`].
 //! - `/api/img/*` – avatars and team logos through the image proxy (T07),
 //!   see [`img`]. No session needed.
 //! - `/api/admin/*` – admin actions on match data (T05), the sync status
@@ -41,6 +43,7 @@ pub mod leaderboard;
 pub mod matches;
 pub mod me;
 pub mod picks;
+pub mod profile;
 pub mod ratelimit;
 
 use std::fmt::Write as _;
@@ -170,6 +173,7 @@ pub fn router_with(state: AppState, static_dir: &Path, extra: Router<AppState>) 
         .merge(events::routes())
         .merge(picks::routes())
         .merge(leaderboard::routes())
+        .merge(profile::routes())
         .nest("/img", img::routes())
         .nest(
             "/admin",

@@ -1,6 +1,7 @@
 import { type Ref, useRef, useState } from 'react'
 import { Link, useOutletContext, useSearchParams } from 'react-router'
 import { leaderboardPath, type Leaderboard, type LeaderboardRow } from '../api.ts'
+import { type ProfileLink, profileLink } from '../members/link.ts'
 import { POLL_IDLE_MS, POLL_LIVE_MS, usePoll } from '../poll.ts'
 import { Avatar } from '../shell/Avatar.tsx'
 import type { ShellContext } from '../shell/Shell.tsx'
@@ -15,6 +16,11 @@ import {
 
 function eventOf(value: string | null): number | null {
   return value !== null && /^\d+$/.test(value) ? Number(value) : null
+}
+
+/** The Leaderboard tab's route, with its filter. */
+function leaderboardRoute(eventId: number | null): string {
+  return eventId === null ? '/leaderboard' : `/leaderboard?event=${eventId}`
 }
 
 /**
@@ -101,6 +107,12 @@ export function LeaderboardView() {
                 hasPrevious={board.has_previous}
                 isMe={row.user_id === me.user_id}
                 linkRef={row.user_id === me.user_id ? myRow : undefined}
+                link={profileLink(
+                  row,
+                  me.user_id,
+                  { to: leaderboardRoute(eventId), label: 'Leaderboard' },
+                  eventId,
+                )}
               />
             ))}
           </ol>
@@ -115,20 +127,22 @@ function BoardRow({
   hasPrevious,
   isMe,
   linkRef,
+  link,
 }: {
   row: LeaderboardRow
   hasPrevious: boolean
   isMe: boolean
   linkRef?: Ref<HTMLAnchorElement>
+  /** The member's profile, with the same event filter. */
+  link: ProfileLink
 }) {
   const change = rankChange(row, hasPrevious)
-  const to = isMe ? '/me' : `/members/${row.user_id}`
   return (
     <li>
       <Link
         ref={linkRef}
-        to={to}
-        state={isMe ? undefined : { name: row.display_name, avatarUrl: row.avatar_url }}
+        to={link.to}
+        state={link.state}
         className={`board-row${isMe ? ' is-me' : ''}`}
         aria-current={isMe ? 'true' : undefined}
       >

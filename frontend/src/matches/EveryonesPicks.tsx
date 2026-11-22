@@ -1,4 +1,6 @@
+import { Link } from 'react-router'
 import type { MatchPicks, TeamRef } from '../api.ts'
+import { profileLink } from '../members/link.ts'
 import { Avatar } from '../shell/Avatar.tsx'
 import { formatDateTime, teamShort } from './format.ts'
 import { pointsLabel, sortPicks, summarizePick } from './summary.ts'
@@ -61,6 +63,8 @@ export function EveryonesPicks({
 }) {
   const { stats } = data
   const seriesTotal = stats.series.reduce((n, s) => n + s.count, 0)
+  // A profile opened from here leads back to this match.
+  const back = { to: `/matches/${data.match_id}`, label: 'Match' }
   return (
     <section className="card" aria-label="Everyone’s picks">
       <div className="card-head">
@@ -114,35 +118,43 @@ export function EveryonesPicks({
               />
             ))}
           <ul className="pick-list">
-            {sortPicks(data.picks).map((p) => (
-              <li key={p.user_id} className={`pick-item${p.user_id === myUserId ? ' is-me' : ''}`}>
-                <Avatar src={p.avatar_url} name={p.display_name} size={32} />
-                <div className="pick-body">
-                  <div className="pick-who">
-                    <span className="pick-name">{p.display_name}</span>
-                    {p.user_id === myUserId && <span className="muted"> (you)</span>}
-                    {p.edited && (
-                      <span className="muted pick-edited">
-                        {' '}
-                        · edited {formatDateTime(p.updated_at)}
-                      </span>
-                    )}
+            {sortPicks(data.picks).map((p) => {
+              const link = profileLink(p, myUserId, back)
+              const isMe = p.user_id === myUserId
+              return (
+                <li key={p.user_id} className={`pick-item${isMe ? ' is-me' : ''}`}>
+                  <Link to={link.to} state={link.state} tabIndex={-1} aria-hidden="true">
+                    <Avatar src={p.avatar_url} name={p.display_name} size={32} />
+                  </Link>
+                  <div className="pick-body">
+                    <div className="pick-who">
+                      <Link to={link.to} state={link.state} className="pick-name">
+                        {p.display_name}
+                      </Link>
+                      {isMe && <span className="muted"> (you)</span>}
+                      {p.edited && (
+                        <span className="muted pick-edited">
+                          {' '}
+                          · edited {formatDateTime(p.updated_at)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="pick-parts">
+                      {summarizePick(p, teamA, teamB).map((part) => (
+                        <span key={part.key} className="part">
+                          <span className="muted">{part.label}</span> {part.value}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="pick-parts">
-                    {summarizePick(p, teamA, teamB).map((part) => (
-                      <span key={part.key} className="part">
-                        <span className="muted">{part.label}</span> {part.value}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                {p.result && (
-                  <span className="tag tag-points">
-                    {pointsLabel(p.result.points, p.result.state)}
-                  </span>
-                )}
-              </li>
-            ))}
+                  {p.result && (
+                    <span className="tag tag-points">
+                      {pointsLabel(p.result.points, p.result.state)}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </>
       )}
