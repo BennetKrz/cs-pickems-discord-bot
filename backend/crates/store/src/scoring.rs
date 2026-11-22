@@ -91,12 +91,9 @@ where
             ..s
         },
         None => GuildSettings {
-            guild_id: guild_id.to_owned(),
-            announce_channel_id: None,
-            admin_role_id: None,
             scoring_rules: next.rules.clone(),
             scoring_rules_version: next.version,
-            updated_at: now,
+            ..GuildSettings::new(guild_id, now)
         },
     };
     guilds::upsert_settings(&mut *tx, &settings).await?;

@@ -17,7 +17,36 @@ pub struct GuildSettings {
     /// `None` means the default rules (T11).
     pub scoring_rules: Option<Value>,
     pub scoring_rules_version: i64,
+    /// Local time of the daily digest, `HH:MM` (T08).
+    pub digest_time: String,
+    /// IANA time zone of `digest_time` (T08).
+    pub timezone: String,
+    /// When the announce channel was set; results of matches that finished
+    /// earlier are never announced (T08).
+    pub announce_since: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
+}
+
+/// Default local time of the daily digest (T08).
+pub const DEFAULT_DIGEST_TIME: &str = "10:00";
+/// Default time zone of the daily digest (T08).
+pub const DEFAULT_TIMEZONE: &str = "Europe/Berlin";
+
+impl GuildSettings {
+    /// A guild's settings before anyone changed them.
+    pub fn new(guild_id: &str, now: DateTime<Utc>) -> Self {
+        Self {
+            guild_id: guild_id.to_owned(),
+            announce_channel_id: None,
+            admin_role_id: None,
+            scoring_rules: None,
+            scoring_rules_version: 1,
+            digest_time: DEFAULT_DIGEST_TIME.to_owned(),
+            timezone: DEFAULT_TIMEZONE.to_owned(),
+            announce_since: None,
+            updated_at: now,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +58,13 @@ pub struct FollowedEvent {
     pub followed_at: DateTime<Utc>,
 }
 
+macro_rules! settings_columns {
+    () => {
+        "guild_id, announce_channel_id, admin_role_id, scoring_rules, \
+     scoring_rules_version, digest_time, timezone, announce_since, updated_at"
+    };
+}
+
 fn settings_from_row(row: SqliteRow) -> DbResult<GuildSettings> {
     Ok(GuildSettings {
         guild_id: row.try_get("guild_id")?,
@@ -38,6 +74,9 @@ fn settings_from_row(row: SqliteRow) -> DbResult<GuildSettings> {
             .try_get::<Option<Json<Value>>, _>("scoring_rules")?
             .map(|j| j.0),
         scoring_rules_version: row.try_get("scoring_rules_version")?,
+        digest_time: row.try_get("digest_time")?,
+        timezone: row.try_get("timezone")?,
+        announce_since: row.try_get("announce_since")?,
         updated_at: row.try_get("updated_at")?,
     })
 }
@@ -55,14 +94,26 @@ pub async fn get_settings(
     ex: impl SqliteExecutor<'_>,
     guild_id: &str,
 ) -> DbResult<Option<GuildSettings>> {
-    sqlx::query(
-        "SELECT guild_id, announce_channel_id, admin_role_id, scoring_rules, \
-           scoring_rules_version, updated_at \
-         FROM guild_settings WHERE guild_id = ?",
-    )
+    sqlx::query(concat!(
+        "SELECT ",
+        settings_columns!(),
+        " FROM guild_settings WHERE guild_id = ?"
+    ))
     .bind(guild_id)
     .try_map(settings_from_row)
     .fetch_optional(ex)
+    .await
+}
+
+/// Every guild with an announce channel (T08), by guild ID.
+pub async fn with_announce_channel(ex: impl SqliteExecutor<'_>) -> DbResult<Vec<GuildSettings>> {
+    sqlx::query(concat!(
+        "SELECT ",
+        settings_columns!(),
+        " FROM guild_settings WHERE announce_channel_id IS NOT NULL ORDER BY guild_id"
+    ))
+    .try_map(settings_from_row)
+    .fetch_all(ex)
     .await
 }
 
@@ -70,13 +121,17 @@ pub async fn get_settings(
 pub async fn upsert_settings(ex: impl SqliteExecutor<'_>, s: &GuildSettings) -> DbResult<()> {
     sqlx::query(
         "INSERT INTO guild_settings (guild_id, announce_channel_id, admin_role_id, \
-           scoring_rules, scoring_rules_version, updated_at) \
-         VALUES (?, ?, ?, ?, ?, ?) \
+           scoring_rules, scoring_rules_version, digest_time, timezone, announce_since, \
+           updated_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT (guild_id) DO UPDATE SET \
            announce_channel_id = excluded.announce_channel_id, \
            admin_role_id = excluded.admin_role_id, \
            scoring_rules = excluded.scoring_rules, \
            scoring_rules_version = excluded.scoring_rules_version, \
+           digest_time = excluded.digest_time, \
+           timezone = excluded.timezone, \
+           announce_since = excluded.announce_since, \
            updated_at = excluded.updated_at",
     )
     .bind(&s.guild_id)
@@ -84,7 +139,78 @@ pub async fn upsert_settings(ex: impl SqliteExecutor<'_>, s: &GuildSettings) -> 
     .bind(&s.admin_role_id)
     .bind(s.scoring_rules.as_ref().map(Json))
     .bind(s.scoring_rules_version)
+    .bind(&s.digest_time)
+    .bind(&s.timezone)
+    .bind(Ts::opt(s.announce_since))
     .bind(Ts(s.updated_at))
+    .execute(ex)
+    .await?;
+    Ok(())
+}
+
+/// Sets the announce channel (T08) and restarts `announce_since`, so only
+/// results from now on are announced there. Other settings are kept.
+pub async fn set_announce_channel(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    channel_id: &str,
+    now: DateTime<Utc>,
+) -> DbResult<()> {
+    sqlx::query(
+        "INSERT INTO guild_settings (guild_id, announce_channel_id, announce_since, updated_at) \
+         VALUES (?1, ?2, ?3, ?3) \
+         ON CONFLICT (guild_id) DO UPDATE SET \
+           announce_channel_id = excluded.announce_channel_id, \
+           announce_since = excluded.announce_since, updated_at = excluded.updated_at",
+    )
+    .bind(guild_id)
+    .bind(channel_id)
+    .bind(Ts(now))
+    .execute(ex)
+    .await?;
+    Ok(())
+}
+
+/// Sets (or with `None` clears) the pick'em admin role (T07, T08). Other
+/// settings are kept.
+pub async fn set_admin_role(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    role_id: Option<&str>,
+    now: DateTime<Utc>,
+) -> DbResult<()> {
+    sqlx::query(
+        "INSERT INTO guild_settings (guild_id, admin_role_id, updated_at) VALUES (?1, ?2, ?3) \
+         ON CONFLICT (guild_id) DO UPDATE SET admin_role_id = excluded.admin_role_id, \
+           updated_at = excluded.updated_at",
+    )
+    .bind(guild_id)
+    .bind(role_id)
+    .bind(Ts(now))
+    .execute(ex)
+    .await?;
+    Ok(())
+}
+
+/// Sets the daily digest's local time (`HH:MM`) and IANA time zone (T08).
+/// The caller validates both. Other settings are kept.
+pub async fn set_digest_schedule(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    digest_time: &str,
+    timezone: &str,
+    now: DateTime<Utc>,
+) -> DbResult<()> {
+    sqlx::query(
+        "INSERT INTO guild_settings (guild_id, digest_time, timezone, updated_at) \
+         VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT (guild_id) DO UPDATE SET digest_time = excluded.digest_time, \
+           timezone = excluded.timezone, updated_at = excluded.updated_at",
+    )
+    .bind(guild_id)
+    .bind(digest_time)
+    .bind(timezone)
+    .bind(Ts(now))
     .execute(ex)
     .await?;
     Ok(())

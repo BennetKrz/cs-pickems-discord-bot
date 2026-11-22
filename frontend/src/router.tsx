@@ -6,8 +6,9 @@ import { Shell } from './shell/Shell.tsx'
 
 /**
  * The Activity always loads at `/` inside Discord's iframe, so routing is
- * in-memory: the browser URL never changes and deep links come from launch
- * parameters instead (T08). `/` opens the Matches tab.
+ * in-memory: the browser URL never changes. Deep links from bot buttons
+ * arrive as a pending view after sign-in (T08, `PendingViewOpener`), since
+ * Discord passes no launch parameters. `/` opens the Matches tab.
  */
 export function createAppRouter(initialPath = '/') {
   return createMemoryRouter(

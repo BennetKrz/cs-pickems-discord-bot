@@ -258,6 +258,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     // Settlement (T11) subscribes before anything can publish, so it
     // misses nothing; its start-up sweep catches up on earlier runs.
     let settle_events = bus.subscribe();
+    // The announcer (T08) too; it re-reads state on every tick, so events
+    // only make it tick early.
+    let bot_events = bus.subscribe();
     let reconciler = Arc::new(reconciler(&config, pool.clone(), bus.clone()));
     let auth = Arc::new(auth_service(&config, pool.clone())?);
     #[cfg_attr(not(feature = "dev"), allow(unused_mut))]
@@ -314,6 +317,15 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     })
     .await
     .context("starting the sync scheduler")?;
+    // The bot (T08) posts and acts on the app clock, like the lock ticker.
+    let bot_deps = bot::BotDeps {
+        pool: pool.clone(),
+        clock: state.clock.clone(),
+        manual: sync::ManualService::new(reconciler.clone()),
+        reconciler: reconciler.clone(),
+        sync: Some(sync_handle.clone()),
+        guild_id: config.discord.guild_id.clone(),
+    };
     state = state.with_sync(sync_handle);
     // The lock ticker follows the app clock, so in fixture mode it locks
     // matches as the dev clock moves.
@@ -351,7 +363,12 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             );
         })
     };
-    let bot_task = tokio::spawn(bot::run(bot_stop.clone()));
+    let bot_task = tokio::spawn(bot::run(
+        bot_deps,
+        config.discord.bot_token.expose().to_owned(),
+        bot_events,
+        bot_stop.clone(),
+    ));
     let app = api::router_with(state, &config.static_dir, extra_api);
     let mut http_task = tokio::spawn(api::serve(listener, app, http_stop.clone()));
 

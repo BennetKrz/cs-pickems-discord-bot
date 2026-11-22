@@ -10,9 +10,11 @@
 //! (T05) works. Conventions are recorded in `docs/adr/0003-database-schema.md`.
 
 pub mod audit;
+pub mod bot;
 pub mod events;
 pub mod guilds;
 pub mod matches;
+pub mod pending_views;
 pub mod picks;
 pub mod provenance;
 pub mod refs;

@@ -835,12 +835,8 @@ async fn scoring_rules_versions_keep_history() {
     guilds::upsert_settings(
         &db.pool,
         &GuildSettings {
-            guild_id: GUILD.to_owned(),
             announce_channel_id: Some("300000000000000001".to_owned()),
-            admin_role_id: None,
-            scoring_rules: None,
-            scoring_rules_version: 1,
-            updated_at: at(9, 0),
+            ..GuildSettings::new(GUILD, at(9, 0))
         },
     )
     .await
@@ -1054,12 +1050,8 @@ async fn guild_settings_and_followed_events() {
     );
 
     let mut settings = GuildSettings {
-        guild_id: GUILD.into(),
         announce_channel_id: Some("300000000000000001".into()),
-        admin_role_id: None,
-        scoring_rules: None,
-        scoring_rules_version: 1,
-        updated_at: at(8, 0),
+        ..GuildSettings::new(GUILD, at(8, 0))
     };
     guilds::upsert_settings(&db.pool, &settings).await.unwrap();
     settings.admin_role_id = Some("400000000000000001".into());
