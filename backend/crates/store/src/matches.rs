@@ -432,6 +432,68 @@ pub async fn list_view(
         .await
 }
 
+/// Matches whose lock time (`lock_at`, else `scheduled_at`) falls in
+/// `[from, to)`, by that time. `?7` is the window's end; event filter and
+/// cursor are unused.
+const WINDOW_SQL: &str = list_sql!(
+    "coalesce(lock_at, scheduled_at)",
+    "m.status <> 'canceled' AND m.sort_at IS NOT NULL AND m.sort_at >= ?3 AND m.sort_at < ?7",
+    ">",
+    "ASC"
+);
+
+/// The daily digest's matches (T08): every match of an event the guild
+/// follows whose lock time is in `[from, to)`, except canceled ones, by
+/// lock time, with teams and the guild's pick count. At most `limit`.
+pub async fn list_lock_window(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+    limit: i64,
+) -> DbResult<Vec<MatchListItem>> {
+    sqlx::query(WINDOW_SQL)
+        .bind(guild_id)
+        .bind(None::<i64>)
+        .bind(Ts(from))
+        .bind(None::<Ts>)
+        .bind(None::<i64>)
+        .bind(limit)
+        .bind(Ts(to))
+        .try_map(list_item_from_row)
+        .fetch_all(ex)
+        .await
+}
+
+/// Several matches by ID, with teams and the guild's pick count, by start
+/// time. Only matches of events the guild follows.
+pub async fn list_by_ids(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    ids: &[MatchId],
+) -> DbResult<Vec<MatchListItem>> {
+    let ids: Vec<i64> = ids.iter().map(|m| m.0).collect();
+    sqlx::query(BY_IDS_SQL)
+        .bind(guild_id)
+        .bind(None::<i64>)
+        .bind(None::<Ts>)
+        .bind(None::<Ts>)
+        .bind(None::<i64>)
+        .bind(ids.len() as i64)
+        .bind(sqlx::types::Json(ids))
+        .try_map(list_item_from_row)
+        .fetch_all(ex)
+        .await
+}
+
+/// Matches by ID (`?7`, a JSON array), by start time (unscheduled first).
+const BY_IDS_SQL: &str = list_sql!(
+    "scheduled_at",
+    "m.id IN (SELECT value FROM json_each(?7)) AND (?3 IS NULL OR TRUE)",
+    ">",
+    "ASC"
+);
+
 /// The maps of several matches, by match and number.
 pub async fn maps_for(
     ex: impl SqliteExecutor<'_>,

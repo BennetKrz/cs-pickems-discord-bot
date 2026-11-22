@@ -29,12 +29,8 @@ async fn set_admin_role(pool: &SqlitePool, role: Option<&str>) {
     store::guilds::upsert_settings(
         pool,
         &GuildSettings {
-            guild_id: GUILD.to_owned(),
-            announce_channel_id: None,
             admin_role_id: role.map(str::to_owned),
-            scoring_rules: None,
-            scoring_rules_version: 1,
-            updated_at: t0(),
+            ..GuildSettings::new(GUILD, t0())
         },
     )
     .await

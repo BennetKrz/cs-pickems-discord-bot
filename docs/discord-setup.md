@@ -1,6 +1,6 @@
 # Discord application setup
 
-One Discord application provides both the bot and the Activity (the embedded web app with all screens). This page walks through the [Developer Portal](https://discord.com/developers/applications) settings it needs and where each value goes. It was checked against Discord's docs on 17 Nov 2026 (sources at the end). The portal's menus change from time to time, so look for the setting by name if a path no longer matches.
+One Discord application provides both the bot and the Activity (the embedded web app with all screens). This page walks through the [Developer Portal](https://discord.com/developers/applications) settings it needs and where each value goes. It was checked against Discord's docs on 17 Nov 2026, and the bot parts on 22 Nov 2026 (sources at the end). The portal's menus change from time to time, so look for the setting by name if a path no longer matches.
 
 Use two applications: one for **production** (URL mapping to your domain) and one for **development** (URL mapping to a dev tunnel). Each has its own IDs and secrets.
 
@@ -26,7 +26,7 @@ The bot must be in the server: sign-in uses the bot token to check that the user
 
 ## 4. Activities
 
-1. **Activities → Settings**: turn on **Enable Activities**. Discord then creates the default *Entry Point* command ("Launch"); T08 builds on it.
+1. **Activities → Settings**: turn on **Enable Activities**. Discord then creates the default *Entry Point* command ("Launch"), a global command that opens the Activity from the App Launcher. Leave it as it is: the bot registers its own commands per server and never touches global commands.
 2. **Activities → Settings → Supported Platforms**: tick **Web**, **iOS** and **Android**. An unticked platform doesn't show the Activity at all, and members use the Discord mobile apps too.
 3. **Activities → URL Mappings**: add **Prefix** `/` and **Target** your host *without* `https://`:
    - production: your public hostname, e.g. `pickem.example.com` (served on the Pi through the bundled Caddy or your Traefik; see [deploy/README.md](../deploy/README.md));
@@ -37,7 +37,7 @@ No other mappings are needed. The Activity calls only its own origin: the API un
 ## 5. Install to your server
 
 1. **Installation → Installation Contexts**: tick **Guild Install**. *User Install* is not needed: the app only works inside a server, and in DMs it only says "Open this from the server".
-2. **Installation → Default Install Settings → Guild Install**: scopes `applications.commands` and `bot`. Bot permissions (for T08's channel posts): *Send Messages*, *Embed Links*, *Use Application Commands*.
+2. **Installation → Default Install Settings → Guild Install**: scopes `applications.commands` and `bot`. Bot permissions (for the channel posts and commands): *Send Messages*, *Embed Links*, *Use Application Commands*.
 3. Open the **Install Link** (`https://discord.com/oauth2/authorize?client_id=<Application ID>`) and add the app to your server. This needs *Manage Server* there.
 
 ## 6. Configure the app
@@ -55,9 +55,39 @@ With `DISCORD_GUILD_ID` set, the app accepts only that server. Without it, it ac
 
 In the Discord client, open a voice or text channel of the server, open the **App Launcher** (the rocket icon) and pick the Activity. While developing, keep **Application URL Override** off when you use a tunnel.
 
+The bot's posts and replies also carry buttons that open the Activity. *Pick* and *View* buttons open it on that match: the bot remembers the match for 10 minutes and the Activity opens it after signing in, because Discord passes no launch parameters.
+
+## 8. Bot commands and posts
+
+Once the app runs, the bot registers its slash commands in the server (in `DISCORD_GUILD_ID`, else in every server it is in). They show up at once.
+
+- Members: `/leaderboard` (top 10) and `/mypicks` (your open picks). Both answer only to you, with a button that opens the Activity.
+- Admins, under `/admin`:
+  - `channel set` picks the channel for posts;
+  - `role set` sets the pick'em admin role;
+  - `digest set` sets the digest's time and time zone;
+  - `status` shows sync health and API quota;
+  - `link list | merge | create` handles source entities that could not be matched;
+  - `match result | clear-override | void | unvoid | reopen` fixes matches by hand.
+
+  Everyone sees the `/admin` commands, but only admins can run them; others get a private error.
+
+Set up the posts:
+
+1. Run `/admin channel set` in the server. Results of matches that finished before this are not posted.
+2. Make sure the bot has *Send Messages* and *Embed Links* in that channel. Channel overrides can take them away.
+3. Optionally run `/admin digest set 10:00 Europe/Berlin` (these are the defaults).
+
+The bot then posts:
+
+- the **daily digest** at that local time, on days with a match still open for picks. It lists the day's matches with lock times and pick counts, and is edited as picks come in;
+- **results** 10 minutes after a match finishes. Matches that finish within those 10 minutes share one post, with the final and map scores and the best pickers.
+
+At most 6 posts go out per hour. Each post is made once, also across restarts.
+
 ## Admins
 
-Members with *Manage Server* in the server (including *Administrator* and the owner) are admins of the pick'em. A role can be added with `/admin role` (T08). Admin status is read from Discord and cached for 5 minutes.
+Members with *Manage Server* in the server (including *Administrator* and the owner) are admins of the pick'em. A role can be added with `/admin role set`. The Activity reads admin status from Discord and caches it for 5 minutes. Bot commands check it on every command from what Discord sends with it.
 
 ## Who can launch it
 
@@ -75,4 +105,7 @@ For a larger server, check Discord's current rules for making the Activity avail
 - [Networking](https://docs.discord.com/developers/activities/development-guides/networking): the proxy and CSP
 - [OAuth2](https://docs.discord.com/developers/topics/oauth2): code exchange
 - [Guild resources](https://docs.discord.com/developers/resources/guild) and [Permissions](https://docs.discord.com/developers/topics/permissions): membership and *Manage Server*
+- [Receiving and responding](https://docs.discord.com/developers/interactions/receiving-and-responding) and [How Activities work](https://docs.discord.com/developers/activities/how-activities-work): `LAUNCH_ACTIVITY` from commands and buttons
+- [Application commands](https://docs.discord.com/developers/interactions/application-commands): the Entry Point command is global only
+- [Messages](https://docs.discord.com/developers/resources/message): `nonce` and `enforce_nonce`; [Message formatting](https://docs.discord.com/developers/reference): `<t:…>` timestamps
 - Discord developer support: [How can my friends play my Activity](https://support-dev.discord.com/hc/articles/21204493235991-How-Can-My-Friends-Play-My-Activity), [Private Activity safety](https://support-dev.discord.com/hc/articles/21692628851351-Private-Activity-Safety)
