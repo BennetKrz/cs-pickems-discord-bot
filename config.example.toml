@@ -15,6 +15,15 @@
 # static_dir = "../frontend/dist"
 # image_cache_dir = "data/img-cache"   # image proxy cache (T07)
 
+# Backups (P4, docs/adr/0015-backups.md). The time zone of backup_time is
+# the environment variable TZ (e.g. TZ=Europe/Berlin); UTC when unset.
+# backup_dir = "data/backups"    # default: backups/ next to the database
+# backup_extra_dir = "/mnt/nas/pickem"   # optional second copy
+# backup_time = "04:00"          # daily, local time; "off" disables it
+# backup_keep_daily = 14
+# backup_keep_weekly = 8
+# backup_keep_special = 5        # pre-migration and pre-restore, each
+
 # Request budget per source, enforced by the sync scheduler (T06).
 # Default: 50% of PandaScore's free plan (1,000/h, 60/min).
 [budget.pandascore]

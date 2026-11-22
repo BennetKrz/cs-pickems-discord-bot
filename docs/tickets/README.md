@@ -54,7 +54,7 @@ Tickets on the same line can run in parallel.
 | [P1](P1-lock-reminders.md) | Lock reminders | P | T08, T10 | proposed |
 | [P2](P2-crowd-upset-bonus.md) | Crowd insight and upset bonus | P | T10, T11, T12 | proposed |
 | [P3](P3-seasons.md) | Seasons | P | T14, T15 | proposed |
-| [P4](P4-backups.md) | Backups | P | T16 | proposed |
+| [P4](P4-backups.md) | Backups | P | T16 | done |
 | [P5](P5-admin-status-alerts.md) | Admin status screen and alerts | P | T06, T07, T08 (P4 optional) | proposed |
 | [P6](P6-streaks-achievements.md) | Streaks and achievements | P | T11, T15 | proposed |
 | [P7](P7-anti-copy-mode.md) | Anti-copy mode | P | T10, T12 | proposed |

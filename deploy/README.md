@@ -16,6 +16,8 @@ In both cases `app` publishes no port. Discord's proxy reaches the Activity thro
 | `traefik/pickem.yml` | Option B2: the same router for Traefik's file provider |
 | `.env.example` | Every setting, compose and app, in one file |
 
+Data lives in `./data`: the SQLite database and its automatic backups (see [Backups and restore](#backups-and-restore)).
+
 ## 1. Prerequisites
 
 - A Raspberry Pi 4 (2 GB or more) or a Pi 5, running **Raspberry Pi OS 64-bit** (Lite is enough). The image is arm64 only.
@@ -119,7 +121,8 @@ Then open the Activity from your Discord server.
 | Update log | `docker compose logs -f watchtower` |
 | Restart | `docker compose restart app` (graceful, within 8 s) |
 | Stop everything | `docker compose down` (the data in `./data` stays) |
-| Back up by hand | `docker compose stop app && cp -a data data.bak-$(date +%F) && docker compose start app` (automatic backups: P4) |
+| Back up now | `/admin backup now` in Discord (daily backups run by themselves, see [Backups and restore](#backups-and-restore)) |
+| Restore a backup | see [Backups and restore](#backups-and-restore) |
 
 **Troubleshooting**
 
@@ -132,7 +135,35 @@ Then open the Activity from your Discord server.
 | `docker compose up` fails with `bind source path does not exist: …/.docker/config.json` | Run `docker login ghcr.io` first (section 3), or point `DOCKER_CONFIG_FILE` in `.env` to your Docker `config.json`. |
 | Watchtower logs `unauthorized` or `denied` for `ghcr.io` | The token in `config.json` expired or lacks `read:packages`. Log in again; Watchtower reads the file on every check. |
 
-The SQLite database is `data/pickem.db` (with `-wal` and `-shm` while running). The image cache is `data/img-cache` and can be deleted at any time.
+The SQLite database is `data/pickem.db` (with `-wal` and `-shm` while running). Backups are in `data/backups`. The image cache is `data/img-cache` and can be deleted at any time.
+
+### Backups and restore
+
+The app backs up its own database; there is no extra container. Each backup is a consistent snapshot taken while the app keeps running. It is checked with SQLite's `integrity_check`, compressed with zstd and stored in `data/backups`:
+
+| File | When | Kept |
+| --- | --- | --- |
+| `pickem-<UTC time>-daily.db.zst` | Daily at `BACKUP_TIME` (default 04:00, in the time zone `TZ`, default UTC). If the Pi was off at that time, the backup runs right after the next start. | Together with the manual ones: the newest of each of the last 14 days, plus the newest of each of the last 8 weeks |
+| `pickem-<UTC time>-manual.db.zst` | `/admin backup now` | As above |
+| `pickem-<UTC time>-premigrate-v<NNNN>.db.zst` | At start-up, before a new release changes the database schema. `NNNN` is the schema version inside the file. | The newest 5 |
+| `pickem-<UTC time>-prerestore.db.zst` | Before `app restore` replaces the database | The newest 5 |
+
+- **A new release never migrates without a backup.** If the pre-migration backup fails (e.g. a full disk), the app logs the error and exits without touching the database. Docker keeps restarting it until the problem is fixed, or until you roll back with `IMAGE_TAG`.
+- `/admin status` in Discord shows the last backup (time and size), the next daily run, and the last error. A failed backup is logged at level `ERROR` with `backup_failed=true`.
+- **Second copy:** mount a NAS share (or any second disk) into the container and set `BACKUP_EXTRA_DIR`. Every backup is copied there and pruned by the same rules. In `docker-compose.yml`, uncomment `- /mnt/nas/pickem:/backup-extra`, then set `BACKUP_EXTRA_DIR=/backup-extra` in `.env`. The share must be writable by `APP_UID`/`APP_GID`. If the copy fails, the backup in `data/backups` still counts and `/admin status` shows the problem.
+- A backup is a single file. Copy one off the Pi with e.g. `scp pi@<pi>:<deploy dir>/data/backups/pickem-…db.zst .`. Unpack it with `zstd -d` and open it with `sqlite3` to inspect it.
+- Settings: `BACKUP_TIME` (`HH:MM` or `off`), `TZ`, `BACKUP_EXTRA_DIR`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `BACKUP_KEEP_SPECIAL`, `BACKUP_DIR` (default `/data/backups`). See `.env.example`.
+
+**Restore** (replaces the current database; the current one is backed up first as `…-prerestore.db.zst`):
+
+```sh
+ls data/backups                                                 # pick a file
+docker compose stop app
+docker compose run --rm app restore pickem-20261122T030000Z-daily.db.zst
+docker compose start app
+```
+
+A bare file name is looked up in `data/backups`; a path inside the container works too, e.g. `/backup-extra/pickem-…db.zst`. The file is checked before anything changes, so a damaged backup is refused and leaves the database untouched. If the current database is too damaged to back up, it is moved aside to `data/pickem.db.broken-<time>` instead. Restoring an older backup is fine across releases: on start, the app migrates it (with a pre-migration backup).
 
 ### Automatic updates (Watchtower)
 

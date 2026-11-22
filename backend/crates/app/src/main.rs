@@ -41,6 +41,15 @@ enum Command {
         #[command(subcommand)]
         command: RulesCommand,
     },
+    /// Replace the database with a backup (P4). Stop the app first:
+    /// `docker compose stop app`, then
+    /// `docker compose run --rm app restore <file>`, then start it again.
+    /// The replaced database is backed up first (kind `prerestore`).
+    Restore {
+        /// A `.db.zst` backup (or a plain `.db`). A bare file name is looked
+        /// up in `BACKUP_DIR`.
+        file: std::path::PathBuf,
+    },
     /// Probe `GET /healthz` of the running app; exit 0 only on 200. For the
     /// Docker HEALTHCHECK. Needs no configuration besides `BIND_ADDR`.
     Healthcheck {
@@ -116,6 +125,7 @@ async fn main() -> ExitCode {
         }) => app::rules_set(config, &guild, &file)
             .await
             .map(|v| println!("scoring rules version {v} saved for guild {guild}")),
+        Some(Command::Restore { file }) => app::restore(config, &file).await,
         Some(Command::Healthcheck { .. }) => unreachable!("handled before loading the config"),
     };
     match result {

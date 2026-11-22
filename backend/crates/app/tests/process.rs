@@ -277,6 +277,76 @@ fn rules_and_rescore_run_and_exit() {
     assert!(log.contains("rescore finished"), "{log}");
 }
 
+/// P4: the running app backs up at once when no backup exists since the
+/// last daily slot, and `app restore <file name>` brings that state back.
+#[test]
+fn backup_on_start_then_restore_from_the_cli() {
+    let dir = tempfile::tempdir().unwrap();
+    let guild = "100000000000000001";
+    let run = |args: &[&str]| {
+        let mut cmd = base_command(dir.path());
+        full_env(&mut cmd, dir.path(), free_port());
+        let (out, _) = wait_with_deadline(cmd.args(args).spawn().unwrap(), Duration::from_secs(10));
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let log = stdout.clone() + &String::from_utf8_lossy(&out.stderr);
+        (out.status, stdout, log)
+    };
+    let rules = |winner: u32| {
+        let file = dir.path().join("rules.json");
+        std::fs::write(&file, format!(r#"{{ "winner": {winner} }}"#)).unwrap();
+        file.to_str().unwrap().to_owned()
+    };
+    let (status, _, log) = run(&["rules", "set", "--guild", guild, &rules(5)]);
+    assert!(status.success(), "{log}");
+
+    // Start the app: it takes the catch-up daily backup.
+    let backups = dir.path().join("data/backups");
+    let port = free_port();
+    let mut cmd = base_command(dir.path());
+    full_env(&mut cmd, dir.path(), port);
+    let mut child = cmd.spawn().unwrap();
+    wait_for_health(&mut child, port);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let daily = loop {
+        let found: Vec<String> = std::fs::read_dir(&backups)
+            .map(|rd| {
+                rd.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                    .filter(|n| n.ends_with("-daily.db.zst"))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Some(f) = found.into_iter().next() {
+            break f;
+        }
+        assert!(Instant::now() < deadline, "no daily backup appeared");
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    let killed = Command::new("kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(killed.success());
+    let (out, _) = wait_with_deadline(child, Duration::from_secs(10));
+    assert!(out.status.success());
+
+    // Change the data, then restore the backup by its bare file name.
+    let (status, _, log) = run(&["rules", "set", "--guild", guild, &rules(7)]);
+    assert!(status.success(), "{log}");
+    let (status, stdout, log) = run(&["restore", &daily]);
+    assert!(status.success(), "{log}");
+    assert!(stdout.contains("Restored"), "{stdout}");
+    assert!(stdout.contains("-prerestore.db.zst"), "{stdout}");
+
+    let (_, stdout, _) = run(&["rules", "show", "--guild", guild]);
+    assert!(stdout.contains("\"version\": 2"), "{stdout}");
+    assert!(stdout.contains("\"winner\": 5"), "{stdout}");
+
+    // A missing file fails without touching anything.
+    let (status, _, log) = run(&["restore", "nope.db.zst"]);
+    assert!(!status.success());
+    assert!(log.contains("is not a file"), "{log}");
+}
+
 /// T05: production builds have no dev endpoints, and refuse the fixture
 /// source instead of silently running without it.
 #[cfg(not(feature = "dev"))]

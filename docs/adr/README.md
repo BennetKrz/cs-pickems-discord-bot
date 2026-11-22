@@ -23,3 +23,4 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | [0012](0012-matches-views.md) | Match list, match detail and the server clock | accepted |
 | [0013](0013-bot-announcements-launch.md) | Bot commands, channel posts and Activity launch | accepted |
 | [0014](0014-followed-events.md) | Followed events | accepted |
+| [0015](0015-backups.md) | Backups | accepted |

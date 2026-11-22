@@ -212,6 +212,7 @@ mod tests {
                 "/admin/role/set",
                 "/admin/digest/set",
                 "/admin/status",
+                "/admin/backup/now",
                 "/admin/link/list",
                 "/admin/link/merge",
                 "/admin/link/create",
