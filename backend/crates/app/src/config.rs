@@ -611,7 +611,7 @@ fn budgets(
 }
 
 /// The `[sync]` keys (lowercase) and `SYNC__<KEY>` variables (uppercase).
-const SYNC_KEYS: [&str; 10] = [
+const SYNC_KEYS: [&str; 11] = [
     "structure_every",
     "upcoming_window",
     "upcoming_every",
@@ -622,6 +622,7 @@ const SYNC_KEYS: [&str; 10] = [
     "corrections_after",
     "search_cache",
     "lock_every",
+    "settle_every",
 ];
 
 /// Parses a duration such as `30s`, `5m`, `6h` or `2d`.
@@ -687,6 +688,7 @@ fn sync_config(
             "live_every" => &mut c.live_every,
             "search_cache" => &mut c.search_cache,
             "lock_every" => &mut c.lock_every,
+            "settle_every" => &mut c.settle_every,
             "corrections_after" => {
                 let parsed: Vec<_> = raw
                     .split(',')

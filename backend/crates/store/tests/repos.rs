@@ -1,4 +1,4 @@
-//! Remine.iter().ma            .all(|(p, n)| p.user_id == ALICE && p.guild_id == GUILD && *n == 1)(|(p, _)| p.match_id).collect::<Vec<_>>()ository round trips against a temp database.
+//! Repository round trips against a temp database.
 
 mod common;
 
@@ -6,7 +6,7 @@ use common::{ALICE, BOB, GUILD, at, event, match_between, seed, team, test_db};
 use domain::{
     BracketPos, BracketSide, EntityType, Event, EventStatus, EventTier, Feed, FeedOutcome, MapPick,
     MapStatus, Match, MatchFields, MatchFormat, MatchMap, MatchStatus, NewStage, PickParts,
-    SeriesScore, Stage, StageKind, Team,
+    ResultState, SeriesScore, Stage, StageKind, Team,
 };
 use serde_json::json;
 use store::audit::AuditRecord;
@@ -16,7 +16,9 @@ use store::refs::{ExternalRef, RecordChange, SourceRecord};
 use store::sessions::Session;
 use store::sync_state::SyncState;
 use store::users::{GuildMember, User};
-use store::{Ts, audit, events, guilds, matches, picks, refs, sessions, sync_state, teams, users};
+use store::{
+    Ts, audit, events, guilds, matches, picks, refs, scoring, sessions, sync_state, teams, users,
+};
 
 #[tokio::test]
 async fn teams_round_trip() {
@@ -732,6 +734,8 @@ async fn deleting_a_pick_removes_its_parts_history_and_result() {
             breakdown: json!({ "winner": 3 }),
             rules_version: 1,
             settled_at: at(22, 0),
+            state: ResultState::Final,
+            pending_parts: 0,
         },
     )
     .await
@@ -778,15 +782,264 @@ async fn pick_results_are_overwritten_not_added() {
         breakdown: json!({ "winner": 3 }),
         rules_version: 1,
         settled_at: at(22, 0),
+        state: ResultState::Provisional,
+        pending_parts: 2,
     };
     picks::upsert_result(&db.pool, &r).await.unwrap();
     // A corrected result recomputes the pick.
     r.points = 0;
     r.breakdown = json!({ "winner": 0 });
     r.settled_at = at(23, 0);
+    r.state = ResultState::Final;
+    r.pending_parts = 0;
     picks::upsert_result(&db.pool, &r).await.unwrap();
     picks::upsert_result(&db.pool, &r).await.unwrap();
     assert_eq!(picks::get_result(&db.pool, p.id).await.unwrap(), Some(r));
+}
+
+fn result(pick_id: domain::PickId, points: i64, state: ResultState, pending: i64) -> PickResult {
+    PickResult {
+        pick_id,
+        points,
+        breakdown: json!({}),
+        rules_version: 1,
+        settled_at: at(22, 0),
+        state,
+        pending_parts: pending,
+    }
+}
+
+#[tokio::test]
+async fn scoring_rules_versions_keep_history() {
+    let db = test_db().await;
+    let rv = |version, rules| scoring::RulesVersion { version, rules };
+
+    // No settings: version 1, default rules, no history.
+    assert_eq!(
+        scoring::current_rules(&db.pool, GUILD).await.unwrap(),
+        rv(1, None)
+    );
+    assert_eq!(
+        scoring::version_at(&db.pool, GUILD, at(12, 0))
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        scoring::rules_of(&db.pool, GUILD, 1).await.unwrap(),
+        Some(rv(1, None))
+    );
+    assert!(scoring::history(&db.pool, GUILD).await.unwrap().is_empty());
+
+    // Other settings survive a rules change.
+    guilds::upsert_settings(
+        &db.pool,
+        &GuildSettings {
+            guild_id: GUILD.to_owned(),
+            announce_channel_id: Some("300000000000000001".to_owned()),
+            admin_role_id: None,
+            scoring_rules: None,
+            scoring_rules_version: 1,
+            updated_at: at(9, 0),
+        },
+    )
+    .await
+    .unwrap();
+    let v2 = scoring::set_rules(&db.pool, GUILD, &json!({ "winner": 5 }), at(12, 0))
+        .await
+        .unwrap();
+    assert_eq!(v2, 2);
+    let v3 = scoring::set_rules(&db.pool, GUILD, &json!({ "winner": 7 }), at(14, 0))
+        .await
+        .unwrap();
+    assert_eq!(v3, 3);
+
+    let s = guilds::get_settings(&db.pool, GUILD)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(s.announce_channel_id.as_deref(), Some("300000000000000001"));
+    assert_eq!(s.scoring_rules, Some(json!({ "winner": 7 })));
+    assert_eq!(s.scoring_rules_version, 3);
+    assert_eq!(s.updated_at, at(14, 0));
+
+    let history = scoring::history(&db.pool, GUILD).await.unwrap();
+    let versions: Vec<_> = history.iter().map(|(v, _)| v.version).collect();
+    assert_eq!(versions, vec![1, 2, 3]);
+    assert_eq!(history[0].0.rules, None, "the original default rules");
+    assert_eq!(history[1].1, at(12, 0));
+
+    for (t, v) in [
+        (at(11, 59), 1),
+        (at(12, 0), 2),
+        (at(13, 0), 2),
+        (at(14, 0), 3),
+    ] {
+        assert_eq!(scoring::version_at(&db.pool, GUILD, t).await.unwrap(), v);
+    }
+    assert_eq!(
+        scoring::rules_of(&db.pool, GUILD, 2).await.unwrap(),
+        Some(rv(2, Some(json!({ "winner": 5 }))))
+    );
+    assert_eq!(
+        scoring::rules_of(&db.pool, GUILD, 1).await.unwrap(),
+        Some(rv(1, None))
+    );
+    assert_eq!(scoring::rules_of(&db.pool, GUILD, 4).await.unwrap(), None);
+
+    // A guild without settings starts its history at version 1, too.
+    let other = "100000000000000002";
+    assert_eq!(
+        scoring::set_rules(&db.pool, other, &json!({}), at(12, 0))
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(scoring::history(&db.pool, other).await.unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn match_pins_round_trip() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    assert_eq!(
+        scoring::get_pin(&db.pool, GUILD, s.bo3).await.unwrap(),
+        None
+    );
+    let mut pin = scoring::MatchPin {
+        guild_id: GUILD.to_owned(),
+        match_id: s.bo3,
+        rules_version: 1,
+        finished_seen_at: None,
+    };
+    scoring::put_pin(&db.pool, &pin).await.unwrap();
+    pin.rules_version = 2;
+    pin.finished_seen_at = Some(at(21, 0));
+    scoring::put_pin(&db.pool, &pin).await.unwrap();
+    assert_eq!(
+        scoring::get_pin(&db.pool, GUILD, s.bo3).await.unwrap(),
+        Some(pin)
+    );
+    assert_eq!(
+        scoring::delete_pins_for_match(&db.pool, s.bo3)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        scoring::get_pin(&db.pool, GUILD, s.bo3).await.unwrap(),
+        None
+    );
+}
+
+#[tokio::test]
+async fn results_per_match_totals_and_the_settle_sweep() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    let other = "100000000000000002";
+    let winner = |t| PickParts {
+        winner_team_id: Some(t),
+        ..PickParts::default()
+    };
+    let pa = picks::save(&db.pool, GUILD, ALICE, s.bo3, &winner(s.team_a), at(12, 0))
+        .await
+        .unwrap();
+    let pb = picks::save(&db.pool, GUILD, BOB, s.bo3, &winner(s.team_b), at(12, 1))
+        .await
+        .unwrap();
+    let po = picks::save(&db.pool, other, ALICE, s.bo3, &winner(s.team_b), at(12, 2))
+        .await
+        .unwrap();
+
+    let mut conn = db.pool.acquire().await.unwrap();
+    let all = picks::list_for_match_all_guilds(&mut conn, s.bo3)
+        .await
+        .unwrap();
+    drop(conn);
+    assert_eq!(
+        all.iter().map(|p| p.id).collect::<Vec<_>>(),
+        vec![pa.id, pb.id, po.id]
+    );
+    assert_eq!(
+        picks::list_for_match(&db.pool, GUILD, s.bo3)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+
+    let sweep = async || scoring::matches_to_settle(&db.pool).await.unwrap();
+    let set_status = async |status, voided| {
+        let mut m = matches::get(&db.pool, s.bo3).await.unwrap().unwrap();
+        m.fields.status = status;
+        m.fields.voided = voided;
+        matches::update(&db.pool, &m).await.unwrap();
+    };
+    let upsert_all = async |points: [i64; 3], state, pending| {
+        for (p, pts) in [&pa, &pb, &po].into_iter().zip(points) {
+            picks::upsert_result(&db.pool, &result(p.id, pts, state, pending))
+                .await
+                .unwrap();
+        }
+    };
+
+    // Scheduled without results: nothing to do.
+    assert!(sweep().await.is_empty());
+    set_status(MatchStatus::Live, false).await;
+    assert_eq!(sweep().await, vec![s.bo3], "picks without results");
+    upsert_all([1, 0, 0], ResultState::Provisional, 2).await;
+    assert_eq!(sweep().await, vec![s.bo3], "provisional while live");
+    set_status(MatchStatus::Finished, false).await;
+    upsert_all([3, 0, 0], ResultState::Final, 0).await;
+    assert!(sweep().await.is_empty(), "final and complete");
+    upsert_all([3, 0, 0], ResultState::Final, 1).await;
+    assert_eq!(sweep().await, vec![s.bo3], "a part still pending");
+    upsert_all([3, 0, 0], ResultState::Final, 0).await;
+
+    let totals = scoring::totals_for_guild(&db.pool, GUILD).await.unwrap();
+    assert_eq!(
+        totals,
+        vec![
+            scoring::UserTotal {
+                user_id: ALICE.to_owned(),
+                points: 3
+            },
+            scoring::UserTotal {
+                user_id: BOB.to_owned(),
+                points: 0
+            },
+        ]
+    );
+    assert_eq!(
+        scoring::totals_for_guild(&db.pool, other).await.unwrap(),
+        vec![scoring::UserTotal {
+            user_id: ALICE.to_owned(),
+            points: 0
+        }]
+    );
+
+    set_status(MatchStatus::Finished, true).await;
+    assert_eq!(sweep().await, vec![s.bo3], "voided, results not void yet");
+    upsert_all([0, 0, 0], ResultState::Void, 0).await;
+    assert!(sweep().await.is_empty());
+    set_status(MatchStatus::Finished, false).await;
+    assert_eq!(sweep().await, vec![s.bo3], "unvoided, results still void");
+
+    set_status(MatchStatus::Scheduled, false).await;
+    assert_eq!(sweep().await, vec![s.bo3], "open again with results");
+    let results = picks::results_for_match(&db.pool, s.bo3).await.unwrap();
+    assert_eq!(results.len(), 3);
+    assert_eq!(
+        picks::delete_results_for_match(&db.pool, s.bo3)
+            .await
+            .unwrap(),
+        3
+    );
+    assert!(sweep().await.is_empty());
+    assert_eq!(
+        scoring::matches_with_picks(&db.pool).await.unwrap(),
+        vec![s.bo3]
+    );
 }
 
 #[tokio::test]

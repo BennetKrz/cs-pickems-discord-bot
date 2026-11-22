@@ -28,12 +28,46 @@ enum Command {
         #[arg(long, required = true)]
         replay: bool,
     },
+    /// Re-settle picks (T11).
+    Rescore {
+        /// Re-settle every match with picks using each guild's current
+        /// scoring rules, then exit. Matches otherwise keep the rules that
+        /// were active when they locked.
+        #[arg(long, required = true)]
+        all: bool,
+    },
+    /// Show or change a guild's scoring rules (T11).
+    Rules {
+        #[command(subcommand)]
+        command: RulesCommand,
+    },
     /// Probe `GET /healthz` of the running app; exit 0 only on 200. For the
     /// Docker HEALTHCHECK. Needs no configuration besides `BIND_ADDR`.
     Healthcheck {
         /// Address to probe. Default: `BIND_ADDR` (wildcard → loopback).
         #[arg(long)]
         addr: Option<SocketAddr>,
+    },
+}
+
+#[derive(Subcommand)]
+enum RulesCommand {
+    /// Print the current rules (defaults filled in) and their history as
+    /// JSON.
+    Show {
+        /// Discord guild ID.
+        #[arg(long)]
+        guild: String,
+    },
+    /// Make a rules JSON file the current rules, as a new version. Fields:
+    /// winner, series, map_winner, map_score; missing ones take the
+    /// defaults 3, 3, 1, 2.
+    Set {
+        /// Discord guild ID.
+        #[arg(long)]
+        guild: String,
+        /// Path to the rules JSON file.
+        file: std::path::PathBuf,
     },
 }
 
@@ -70,6 +104,18 @@ async fn main() -> ExitCode {
     let result = match cli.command {
         None => app::run(config).await,
         Some(Command::Reconcile { replay: _ }) => app::replay(config).await.map(|_| ()),
+        Some(Command::Rescore { all: _ }) => app::rescore(config).await.map(|_| ()),
+        Some(Command::Rules {
+            command: RulesCommand::Show { guild },
+        }) => app::rules_show(config, &guild).await.and_then(|v| {
+            println!("{}", serde_json::to_string_pretty(&v)?);
+            Ok(())
+        }),
+        Some(Command::Rules {
+            command: RulesCommand::Set { guild, file },
+        }) => app::rules_set(config, &guild, &file)
+            .await
+            .map(|v| println!("scoring rules version {v} saved for guild {guild}")),
         Some(Command::Healthcheck { .. }) => unreachable!("handled before loading the config"),
     };
     match result {

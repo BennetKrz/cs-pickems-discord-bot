@@ -19,3 +19,4 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | [0008](0008-container-image-and-proxy.md) | Container image, optional Caddy or existing Traefik, rate limits | accepted |
 | [0009](0009-ci-cd-and-watchtower.md) | CI/CD pipeline, image tags and Watchtower | accepted |
 | [0010](0010-pick-rules-and-api.md) | Pick rules and pick API | accepted |
+| [0011](0011-scoring-and-settlement.md) | Scoring and settlement | accepted |

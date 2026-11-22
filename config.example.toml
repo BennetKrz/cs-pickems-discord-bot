@@ -34,6 +34,7 @@ per_minute = 30
 # corrections_after = ["10m", "2h"]
 # search_cache = "24h"
 # lock_every = "30s"
+# settle_every = "10m"       # settlement sweep (T11)
 
 # Reconciliation (T03, docs/adr/0004-source-adapters-reconciliation.md).
 # Only the primary source creates events, teams and matches; other sources

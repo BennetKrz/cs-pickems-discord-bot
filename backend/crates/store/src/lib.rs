@@ -17,6 +17,7 @@ pub mod picks;
 pub mod provenance;
 pub mod refs;
 mod row;
+pub mod scoring;
 pub mod sessions;
 pub mod sync_state;
 pub mod teams;

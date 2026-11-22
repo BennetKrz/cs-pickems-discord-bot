@@ -138,6 +138,99 @@ pub async fn replay(config: Config) -> anyhow::Result<sync::Report> {
     Ok(report)
 }
 
+/// `app rescore --all`: re-settles every match with picks using each
+/// guild's **current** scoring rules (T11), then exits. Normally a match
+/// keeps the rules that were active when it locked; this applies a rules
+/// change to history on purpose.
+pub async fn rescore(config: Config) -> anyhow::Result<sync::SettleReport> {
+    let pool = store::open(&config.database_url)
+        .await
+        .context("opening the database")?;
+    let report = sync::settle::rescore_all(&pool, chrono::Utc::now())
+        .await
+        .context("rescoring")?;
+    tracing::info!(
+        matches = report.matches,
+        picks = report.picks,
+        written = report.written,
+        "rescore finished"
+    );
+    pool.close().await;
+    Ok(report)
+}
+
+fn check_guild_id(guild_id: &str) -> anyhow::Result<()> {
+    if guild_id.is_empty() || !guild_id.bytes().all(|b| b.is_ascii_digit()) {
+        anyhow::bail!("`{guild_id}` is not a Discord guild ID");
+    }
+    Ok(())
+}
+
+/// `app rules show --guild <id>`: the guild's current scoring rules (with
+/// defaults filled in) and its version history, as JSON.
+pub async fn rules_show(config: Config, guild_id: &str) -> anyhow::Result<serde_json::Value> {
+    check_guild_id(guild_id)?;
+    let pool = store::open(&config.database_url)
+        .await
+        .context("opening the database")?;
+    let current = store::scoring::current_rules(&pool, guild_id).await?;
+    let history = store::scoring::history(&pool, guild_id).await?;
+    pool.close().await;
+    let effective: domain::scoring::ScoringRules = match &current.rules {
+        None => domain::scoring::ScoringRules::default(),
+        Some(v) => serde_json::from_value(v.clone()).context("the stored rules are invalid")?,
+    };
+    Ok(serde_json::json!({
+        "guild_id": guild_id,
+        "version": current.version,
+        "rules": effective,
+        "history": history
+            .iter()
+            .map(|(v, from)| serde_json::json!({
+                "version": v.version,
+                "valid_from": store::format_ts(from),
+                "rules": v.rules,
+            }))
+            .collect::<Vec<_>>(),
+    }))
+}
+
+/// `app rules set --guild <id> <file>`: validates a rules JSON file and
+/// makes it the guild's current rules as a new version. Matches that
+/// already locked keep their rules; `app rescore --all` changes that.
+pub async fn rules_set(
+    config: Config,
+    guild_id: &str,
+    file: &std::path::Path,
+) -> anyhow::Result<i64> {
+    check_guild_id(guild_id)?;
+    let text =
+        std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+    let rules: domain::scoring::ScoringRules = serde_json::from_str(&text)
+        .with_context(|| format!("{} is not a valid rules file", file.display()))?;
+    rules.validate()?;
+    let pool = store::open(&config.database_url)
+        .await
+        .context("opening the database")?;
+    let version = store::scoring::set_rules(
+        &pool,
+        guild_id,
+        &serde_json::to_value(rules)?,
+        chrono::Utc::now(),
+    )
+    .await
+    .context("saving the rules")?;
+    pool.close().await;
+    tracing::info!(
+        guild_id,
+        version,
+        ?rules,
+        "scoring rules saved; matches that already locked keep their rules \
+         (run `app rescore --all` to apply them to history)"
+    );
+    Ok(version)
+}
+
 /// Runs all components until SIGTERM/SIGINT, then stops them in order: sync
 /// worker, bot gateway, HTTP (draining in-flight requests), database.
 pub async fn run(config: Config) -> anyhow::Result<()> {
@@ -162,6 +255,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
 
     // Domain events from the reconciler; T08, T10 and T11 subscribe here.
     let bus = sync::EventBus::new();
+    // Settlement (T11) subscribes before anything can publish, so it
+    // misses nothing; its start-up sweep catches up on earlier runs.
+    let settle_events = bus.subscribe();
     let reconciler = Arc::new(reconciler(&config, pool.clone(), bus.clone()));
     let auth = Arc::new(auth_service(&config, pool.clone())?);
     #[cfg_attr(not(feature = "dev"), allow(unused_mut))]
@@ -227,6 +323,12 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         .lock_every
         .to_std()
         .context("SYNC__LOCK_EVERY")?;
+    let settle_clock = state.clock.clone();
+    let settle_every = config
+        .sync
+        .settle_every
+        .to_std()
+        .context("SYNC__SETTLE_EVERY")?;
 
     let listener = TcpListener::bind(config.bind_addr)
         .await
@@ -244,7 +346,8 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         tokio::spawn(async move {
             tokio::join!(
                 scheduler.run(stop.clone()),
-                sync::run_lock_ticker(pool, lock_clock, lock_every, stop),
+                sync::run_lock_ticker(pool.clone(), lock_clock, lock_every, stop.clone()),
+                sync::run_settler(pool, settle_clock, settle_events, settle_every, stop),
             );
         })
     };
