@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Link, useOutletContext, useParams } from 'react-router'
+import { Link, useLocation, useOutletContext, useParams } from 'react-router'
 import { matchPath, matchPicksPath, type MatchDetail as Detail, type MatchPicks } from '../api.ts'
 import { useLockPassed, useServerNow } from '../clock.ts'
+import { backFrom } from '../nav.ts'
 import { POLL_IDLE_MS, POLL_LIVE_MS, usePoll } from '../poll.ts'
 import type { ShellContext } from '../shell/Shell.tsx'
 import { ErrorState, Loading } from '../shell/states.tsx'
@@ -46,6 +47,8 @@ function MatchDetailView({ matchId }: { matchId: number }) {
   const lockPassed = useLockPassed(detail.data?.lock_at ?? picks.data?.lock_at)
   // A save answered `pick_locked`: the server's clock is ahead of ours.
   const [lockedByServer, setLockedByServer] = useState(false)
+  // Opened from an event's bracket or standings: back leads there.
+  const back = backFrom(useLocation().state) ?? { to: '/matches', label: 'Matches' }
 
   if (detail.loading || picks.loading) return <Loading label="Loading match…" />
   if (!detail.data || !picks.data) {
@@ -78,8 +81,8 @@ function MatchDetailView({ matchId }: { matchId: number }) {
 
   return (
     <>
-      <Link to="/matches" className="back">
-        ← Matches
+      <Link to={back.to} className="back">
+        ← {back.label}
       </Link>
       <Header m={m} />
       {m.maps.length > 0 && <Maps m={m} />}

@@ -306,9 +306,19 @@ pub struct MatchListItem {
 /// segment's condition (on `m` and `?3`, the bound), `$cmp`/`$dir` the
 /// cursor comparison and order. Parameters: `?1` guild, `?2` event or NULL,
 /// `?3` bound, `?4`/`?5` cursor time and ID (NULL for the first page),
-/// `?6` limit.
+/// `?6` limit. Only matches of events the guild follows, unless the
+/// `@from` arm passes another join (`""` for none).
 macro_rules! list_sql {
     ($key:literal, $where:literal, $cmp:literal, $dir:literal) => {
+        list_sql!(
+            @from "JOIN followed_events fe ON fe.event_id = m.event_id AND fe.guild_id = ?1 ",
+            $key,
+            $where,
+            $cmp,
+            $dir
+        )
+    };
+    (@from $follow:literal, $key:literal, $where:literal, $cmp:literal, $dir:literal) => {
         concat!(
             "SELECT m.*, e.name AS event_name, s.name AS stage_name, \
                ta.name AS ta_name, ta.acronym AS ta_acronym, ta.logo_url AS ta_logo_url, \
@@ -321,9 +331,9 @@ macro_rules! list_sql {
             field_columns!(),
             ", ",
             $key,
-            " AS sort_at FROM matches) m \
-             JOIN followed_events fe ON fe.event_id = m.event_id AND fe.guild_id = ?1 \
-             JOIN events e ON e.id = m.event_id \
+            " AS sort_at FROM matches) m ",
+            $follow,
+            "JOIN events e ON e.id = m.event_id \
              LEFT JOIN stages s ON s.id = m.stage_id \
              LEFT JOIN teams ta ON ta.id = m.team_a_id \
              LEFT JOIN teams tb ON tb.id = m.team_b_id \
@@ -481,6 +491,40 @@ pub async fn list_by_ids(
         .bind(None::<i64>)
         .bind(ids.len() as i64)
         .bind(sqlx::types::Json(ids))
+        .try_map(list_item_from_row)
+        .fetch_all(ex)
+        .await
+}
+
+/// Every match of event `?2`, followed or not, by start time (unscheduled
+/// first).
+const EVENT_SQL: &str = list_sql!(
+    @from "",
+    "scheduled_at",
+    "m.event_id = ?2 AND (?3 IS NULL OR TRUE)",
+    ">",
+    "ASC"
+);
+
+/// The upper bound of matches [`list_event_view`] returns; far above any
+/// real event.
+pub const EVENT_VIEW_LIMIT: i64 = 2000;
+
+/// Every match of an event in any state, followed by the guild or not, for
+/// the event view (T13): with event, stage, teams and the guild's pick
+/// count, by start time (unscheduled first), at most [`EVENT_VIEW_LIMIT`].
+pub async fn list_event_view(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    event_id: EventId,
+) -> DbResult<Vec<MatchListItem>> {
+    sqlx::query(EVENT_SQL)
+        .bind(guild_id)
+        .bind(event_id.0)
+        .bind(None::<Ts>)
+        .bind(None::<Ts>)
+        .bind(None::<i64>)
+        .bind(EVENT_VIEW_LIMIT)
         .try_map(list_item_from_row)
         .fetch_all(ex)
         .await

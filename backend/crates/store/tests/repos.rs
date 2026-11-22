@@ -1867,3 +1867,63 @@ async fn followed_overview_known_event_search_and_picks_per_event() {
         ["BLAST 50%_Cup", "IEM Test", "Other Cup"]
     );
 }
+
+// ---- event view (T13) -----------------------------------------------------------
+
+#[tokio::test]
+async fn event_view_lists_every_match_of_one_event_without_a_follow() {
+    use MatchStatus::*;
+    let db = test_db().await;
+    let s = seed(&db.pool).await; // s.bo3: scheduled at 18:00
+    let p = &db.pool;
+    let (a, b) = (Some(s.team_a), Some(s.team_b));
+    let other_ev = event(p, "Other Cup").await;
+    let live = list_match(
+        p,
+        s.event,
+        a,
+        b,
+        Live,
+        Some(at(11, 0)),
+        Some(at(11, 0)),
+        None,
+    )
+    .await;
+    let done = list_match(
+        p,
+        s.event,
+        a,
+        b,
+        Finished,
+        Some(at(8, 0)),
+        Some(at(8, 0)),
+        Some(at(10, 0)),
+    )
+    .await;
+    let tbd = list_match(p, s.event, None, None, Scheduled, None, None, None).await;
+    list_match(p, other_ev, a, b, Scheduled, Some(at(12, 0)), None, None).await;
+    let winner = PickParts {
+        winner_team_id: Some(s.team_a),
+        series: None,
+        maps: Vec::new(),
+    };
+    picks::save(p, GUILD, ALICE, s.bo3, &winner, at(9, 0))
+        .await
+        .unwrap();
+    picks::save(p, "100000000000000002", BOB, s.bo3, &winner, at(9, 0))
+        .await
+        .unwrap();
+
+    // Not followed by anyone: still listed, every state, unscheduled first.
+    let items = matches::list_event_view(p, GUILD, s.event).await.unwrap();
+    assert_eq!(ids(&items), vec![tbd, done, live, s.bo3]);
+    assert_eq!(items[0].team_a, None);
+    let bo3 = items.iter().find(|i| i.m.id == s.bo3).unwrap();
+    assert_eq!(bo3.pick_count, 1, "only this guild's picks");
+    assert_eq!(bo3.event_name, "IEM Test");
+
+    // The overview counts live matches.
+    follow(p, GUILD, s.event).await;
+    let o = guilds::followed_overview(p, GUILD).await.unwrap();
+    assert_eq!((o[0].matches, o[0].live), (4, 1));
+}

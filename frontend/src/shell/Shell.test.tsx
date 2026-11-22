@@ -26,6 +26,7 @@ describe('Shell', () => {
           next_cursor: null,
         })
       }
+      if (url === '/api/events') return fakeResponse(200, { events: [] })
       if (url.startsWith('/api/leaderboard')) {
         return fakeResponse(200, {
           event_id: null,
@@ -63,7 +64,7 @@ describe('Shell', () => {
     expect(tab('Matches')).not.toHaveAttribute('aria-current')
 
     fireEvent.click(tab('Events'))
-    expect(await screen.findByRole('heading', { name: 'No events yet' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'No events followed yet' })).toBeInTheDocument()
   })
 
   it('shows the profile on Me, with the admin badge only for admins', async () => {

@@ -48,7 +48,7 @@ flowchart LR
 
 | Component | Crate | Responsibility | Tickets |
 | --- | --- | --- | --- |
-| Domain | `domain` | Types, pick validation, scoring, achievements, the admin rule. Pure functions, no I/O. | T07, T10, T11, P6 |
+| Domain | `domain` | Types, pick validation, scoring, bracket positions and standings, achievements, the admin rule. Pure functions, no I/O. | T07, T10, T11, T13, P6 |
 | Store | `store` | sqlx repositories and migrations. | T02 |
 | Sources | `sources` | `SourceAdapter` trait and adapters (PandaScore, manual, fixture). Fetch and convert only, never write the DB. | T03–T05 |
 | Sync | `sync` | Scheduler with API budget, reconciler, lock ticker, domain events, following events. | T03, T06, T09 |

@@ -293,6 +293,8 @@ pub struct FollowedOverview {
     pub followed_at: DateTime<Utc>,
     /// Matches of the event, of any state.
     pub matches: i64,
+    /// Matches being played now (T13).
+    pub live: i64,
     /// Picks the guild made on them.
     pub picks: i64,
 }
@@ -307,6 +309,8 @@ pub async fn followed_overview(
         "SELECT e.id, e.name, e.tier, e.begin_at, e.end_at, e.status, \
            fe.followed_by, fe.followed_at, \
            (SELECT COUNT(*) FROM matches m WHERE m.event_id = e.id) AS match_count, \
+           (SELECT COUNT(*) FROM matches m WHERE m.event_id = e.id AND m.status = 'live') \
+             AS live_count, \
            (SELECT COUNT(*) FROM picks p JOIN matches m ON m.id = p.match_id \
              WHERE m.event_id = e.id AND p.guild_id = ?1) AS pick_count \
          FROM followed_events fe JOIN events e ON e.id = fe.event_id \
@@ -327,6 +331,7 @@ pub async fn followed_overview(
             followed_by: row.try_get("followed_by")?,
             followed_at: row.try_get("followed_at")?,
             matches: row.try_get("match_count")?,
+            live: row.try_get("live_count")?,
             picks: row.try_get("pick_count")?,
         })
     })
