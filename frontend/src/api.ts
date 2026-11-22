@@ -3,6 +3,8 @@
  * Discord's proxy to the backend; in `pnpm dev`, Vite proxies `/api`.
  */
 
+import { noteServerTime, SERVER_TIME_HEADER } from './clock.ts'
+
 /** The signed-in member, as `GET /api/me` returns it. */
 export interface Me {
   user_id: string
@@ -78,6 +80,33 @@ export interface PickView extends SavedPickParts {
   created_at: string
   updated_at: string
   edited: boolean
+  /** The settled points (T11); `null` until settlement ran. */
+  result: PickResult | null
+}
+
+// ---- points (T11) -----------------------------------------------------------
+
+/** `provisional` while live, `final` once over, `void` for no points. */
+export type ResultState = 'provisional' | 'final' | 'void'
+
+export interface PartScore {
+  outcome: 'hit' | 'miss' | 'pending' | 'void'
+  points: number
+}
+
+/** Every scored part of a pick; a part the pick doesn't have is `null` or absent. */
+export interface Breakdown {
+  winner: PartScore | null
+  series: PartScore | null
+  maps: { map_number: number; winner: PartScore; score: PartScore | null }[]
+}
+
+export interface PickResult {
+  points: number
+  state: ResultState
+  /** Parts still waiting for a result or for data. */
+  pending_parts: number
+  breakdown: Breakdown
 }
 
 /** Picks split between team A and team B; percentages add up to 100. */
@@ -120,6 +149,106 @@ export function matchPicksPath(matchId: number): string {
 
 /** Path of the caller's picks, for `usePoll`. */
 export const MY_PICKS_PATH = '/api/me/picks'
+
+// ---- matches (T12) ----------------------------------------------------------
+// All times are RFC 3339 UTC; the UI shows them in the viewer's time zone.
+
+export type MatchFormat = 'bo1' | 'bo3' | 'bo5'
+export type MatchStatus = 'scheduled' | 'live' | 'finished' | 'canceled' | 'postponed'
+export type MapStatus = 'upcoming' | 'live' | 'finished' | 'not_played'
+/** A segment of the match list. */
+export type MatchSegment = 'upcoming' | 'live' | 'finished'
+
+export interface Named {
+  id: number
+  name: string
+}
+
+export interface TeamRef {
+  id: number
+  name: string
+  acronym: string | null
+  /** Relative URL through the image proxy; `null` without a logo. */
+  logo_url: string | null
+}
+
+/** What a list row and the detail header share. */
+export interface MatchHeader {
+  id: number
+  event: Named
+  stage: Named | null
+  /** `null` while TBD. */
+  team_a: TeamRef | null
+  team_b: TeamRef | null
+  format: MatchFormat
+  status: MatchStatus
+  /** Voided by an admin: no points for anyone. */
+  voided: boolean
+  scheduled_at: string | null
+  started_at: string | null
+  ended_at: string | null
+  lock_at: string | null
+  locked: boolean
+  pickable: boolean
+  maps_won_a: number
+  maps_won_b: number
+  winner_team_id: number | null
+  /** The map being played now. */
+  current_map: {
+    number: number
+    map_name: string | null
+    rounds_a: number | null
+    rounds_b: number | null
+  } | null
+  /** Picks in this server. */
+  pick_count: number
+}
+
+export interface MatchRow extends MatchHeader {
+  my_pick: 'none' | 'partial' | 'full'
+  my_result: { points: number; state: ResultState; pending_parts: number } | null
+}
+
+/** Answer of `GET /api/matches`. */
+export interface MatchList {
+  state: MatchSegment
+  /** The server follows at least one event. */
+  following_any: boolean
+  matches: MatchRow[]
+  /** For the next page; `null` on the last. */
+  next_cursor: string | null
+}
+
+export interface MapRow {
+  number: number
+  /** `null` until the veto is known. */
+  map_name: string | null
+  status: MapStatus
+  rounds_a: number | null
+  rounds_b: number | null
+  winner_team_id: number | null
+}
+
+/** Answer of `GET /api/matches/{id}`. */
+export interface MatchDetail extends MatchHeader {
+  maps: MapRow[]
+}
+
+/** Path of one segment of the match list. */
+export function matchesPath(
+  state: MatchSegment,
+  opts: { eventId?: number; cursor?: string | null } = {},
+): string {
+  const q = new URLSearchParams({ state })
+  if (opts.eventId !== undefined) q.set('event_id', String(opts.eventId))
+  if (opts.cursor) q.set('cursor', opts.cursor)
+  return `/api/matches?${q.toString()}`
+}
+
+/** Path of one match. */
+export function matchPath(matchId: number): string {
+  return `/api/matches/${matchId}`
+}
 
 /** Error codes of the pick API. */
 export const PICK_LOCKED = 'pick_locked'
@@ -203,6 +332,7 @@ export class ApiClient {
     if (opts.etag) headers['If-None-Match'] = opts.etag
     // `no-store` keeps the browser cache out: the app does the revalidation.
     const res = await fetch(path, { headers, signal: opts.signal, cache: 'no-store' })
+    noteServerTime(res.headers.get(SERVER_TIME_HEADER))
     if (res.status === 304) return { notModified: true }
     if (!res.ok) {
       const err = await toApiError(res)
@@ -221,6 +351,7 @@ export class ApiClient {
       init.body = JSON.stringify(body)
     }
     const res = await fetch(path, init)
+    noteServerTime(res.headers.get(SERVER_TIME_HEADER))
     if (!res.ok) {
       const err = await toApiError(res)
       if (res.status === 401) this.onUnauthorized()

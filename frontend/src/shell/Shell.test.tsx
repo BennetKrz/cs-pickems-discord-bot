@@ -17,7 +17,16 @@ function renderShell(me: Me = ME, path = '/') {
 
 describe('Shell', () => {
   beforeEach(() => {
-    mockFetch(() => fakeResponse(304))
+    mockFetch((url) =>
+      url.startsWith('/api/matches?')
+        ? fakeResponse(200, {
+            state: 'upcoming',
+            following_any: true,
+            matches: [],
+            next_cursor: null,
+          })
+        : fakeResponse(304),
+    )
   })
 
   it("shows the member's name and avatar", () => {
@@ -34,7 +43,7 @@ describe('Shell', () => {
     const nav = screen.getByRole('navigation', { name: 'Sections' })
     const tab = (name: string) => within(nav).getByRole('link', { name })
 
-    expect(await screen.findByRole('heading', { name: 'No matches yet' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'No upcoming matches' })).toBeInTheDocument()
     expect(tab('Matches')).toHaveAttribute('aria-current', 'page')
 
     fireEvent.click(tab('Leaderboard'))
@@ -68,6 +77,6 @@ describe('Shell', () => {
 
   it('sends unknown paths to Matches', async () => {
     renderShell(ME, '/nowhere')
-    expect(await screen.findByRole('heading', { name: 'No matches yet' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'No upcoming matches' })).toBeInTheDocument()
   })
 })

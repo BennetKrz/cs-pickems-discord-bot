@@ -3,16 +3,8 @@ import { Avatar } from '../shell/Avatar.tsx'
 import type { ShellContext } from '../shell/Shell.tsx'
 import { EmptyState } from '../shell/states.tsx'
 
-// Placeholders for the tab views. T12 (Matches), T13 (Events), T14
-// (Leaderboard) and T15 (Me) replace them.
-
-export function Matches() {
-  return (
-    <EmptyState title="No matches yet">
-      Upcoming, live and finished matches of followed events show up here, with your picks.
-    </EmptyState>
-  )
-}
+// Placeholders for the tab views. T13 (Events), T14 (Leaderboard) and T15
+// (Me) replace them; Matches is in ../matches/ (T12).
 
 export function Events() {
   return (

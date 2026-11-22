@@ -1413,3 +1413,315 @@ async fn sessions_expire_and_follow_their_user() {
     sessions::create(&db.pool, &c).await.unwrap();
     assert!(sessions::delete(&db.pool, &c.token_hash).await.unwrap());
 }
+
+// ---- match list (T12) -----------------------------------------------------------
+
+/// Inserts a match of `ev` with `status` and times relative to 18:00 on
+/// 2026-11-20 (`at(h, m)`), between `a` and `b`.
+#[allow(clippy::too_many_arguments)]
+async fn list_match(
+    pool: &store::SqlitePool,
+    ev: domain::EventId,
+    a: Option<domain::TeamId>,
+    b: Option<domain::TeamId>,
+    status: MatchStatus,
+    scheduled: Option<chrono::DateTime<chrono::Utc>>,
+    started: Option<chrono::DateTime<chrono::Utc>>,
+    ended: Option<chrono::DateTime<chrono::Utc>>,
+) -> domain::MatchId {
+    let mut f = MatchFields::scheduled(ev, a, b, MatchFormat::Bo3, scheduled);
+    f.status = status;
+    f.started_at = started;
+    f.ended_at = ended;
+    matches::insert(pool, &f).await.unwrap()
+}
+
+fn query(segment: matches::Segment) -> matches::ListQuery<'static> {
+    matches::ListQuery {
+        guild_id: GUILD,
+        segment,
+        bound: None,
+        event_id: None,
+        after: None,
+        limit: 100,
+    }
+}
+
+async fn follow(pool: &store::SqlitePool, guild: &str, ev: domain::EventId) {
+    guilds::follow_event(
+        pool,
+        &FollowedEvent {
+            guild_id: guild.into(),
+            event_id: ev,
+            followed_by: ALICE.into(),
+            followed_at: at(9, 0),
+        },
+    )
+    .await
+    .unwrap();
+}
+
+fn ids(items: &[matches::MatchListItem]) -> Vec<domain::MatchId> {
+    items.iter().map(|i| i.m.id).collect()
+}
+
+#[tokio::test]
+async fn match_list_segments_follow_status_time_and_follows() {
+    use MatchStatus::*;
+    use matches::Segment;
+    let db = test_db().await;
+    let s = seed(&db.pool).await; // s.bo3: scheduled at 18:00, not followed yet
+    let p = &db.pool;
+    let (a, b) = (Some(s.team_a), Some(s.team_b));
+    let other_ev = event(p, "Unfollowed Cup").await;
+    follow(p, GUILD, s.event).await;
+    follow(p, "100000000000000002", other_ev).await;
+
+    let tomorrow = at(18, 0) + chrono::Duration::days(1);
+    let far = at(18, 0) + chrono::Duration::days(20);
+    let early = list_match(p, s.event, a, None, Scheduled, Some(at(12, 0)), None, None).await;
+    let later = list_match(p, s.event, a, b, Scheduled, Some(tomorrow), None, None).await;
+    let too_far = list_match(p, s.event, a, b, Scheduled, Some(far), None, None).await;
+    let postponed = list_match(p, s.event, a, b, Postponed, Some(at(20, 0)), None, None).await;
+    let no_time = list_match(p, s.event, a, b, Scheduled, None, None, None).await;
+    let live = list_match(
+        p,
+        s.event,
+        a,
+        b,
+        Live,
+        Some(at(11, 0)),
+        Some(at(11, 5)),
+        None,
+    )
+    .await;
+    let done = list_match(
+        p,
+        s.event,
+        a,
+        b,
+        Finished,
+        Some(at(8, 0)),
+        Some(at(8, 0)),
+        Some(at(10, 0)),
+    )
+    .await;
+    let canceled = list_match(p, s.event, a, b, Canceled, Some(at(9, 0)), None, None).await;
+    let elsewhere = list_match(p, other_ev, a, b, Scheduled, Some(at(13, 0)), None, None).await;
+
+    let upcoming = matches::list_view(
+        p,
+        &matches::ListQuery {
+            bound: Some(at(18, 0) + chrono::Duration::days(14)),
+            ..query(Segment::Upcoming)
+        },
+    )
+    .await
+    .unwrap();
+    // By start time; the TBD match has no team B; too_far, no_time and the
+    // unfollowed event's match are missing.
+    assert_eq!(ids(&upcoming), vec![early, s.bo3, postponed, later]);
+    assert!(!ids(&upcoming).contains(&too_far));
+    assert!(!ids(&upcoming).contains(&no_time));
+    assert!(!ids(&upcoming).contains(&elsewhere));
+    assert_eq!(upcoming[0].team_a.as_ref().unwrap().name, "Alpha");
+    assert_eq!(upcoming[0].team_b, None);
+    assert_eq!(upcoming[0].event_name, "IEM Test");
+    assert_eq!(upcoming[0].sort_at, Some(at(12, 0)));
+
+    let live_list = matches::list_view(p, &query(Segment::Live)).await.unwrap();
+    assert_eq!(ids(&live_list), vec![live]);
+    assert_eq!(live_list[0].sort_at, Some(at(11, 5)));
+
+    let finished = matches::list_view(
+        p,
+        &matches::ListQuery {
+            bound: Some(at(0, 0)),
+            ..query(Segment::Finished)
+        },
+    )
+    .await
+    .unwrap();
+    // Latest first: the finished match by its end (10:00), the canceled one
+    // by its schedule (09:00).
+    assert_eq!(ids(&finished), vec![done, canceled]);
+    let finished = matches::list_view(
+        p,
+        &matches::ListQuery {
+            bound: Some(at(9, 30)),
+            ..query(Segment::Finished)
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ids(&finished), vec![done]);
+
+    // The other guild sees only its own event.
+    let theirs = matches::list_view(
+        p,
+        &matches::ListQuery {
+            guild_id: "100000000000000002",
+            ..query(Segment::Upcoming)
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ids(&theirs), vec![elsewhere]);
+}
+
+#[tokio::test]
+async fn match_list_counts_guild_picks_filters_by_event_and_pages() {
+    use matches::Segment;
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    let p = &db.pool;
+    let ev2 = event(p, "Second Cup").await;
+    follow(p, GUILD, s.event).await;
+    follow(p, GUILD, ev2).await;
+    let (a, b) = (Some(s.team_a), Some(s.team_b));
+    let mut done = Vec::new();
+    for h in [10, 11, 12, 13, 14] {
+        done.push(
+            list_match(
+                p,
+                if h == 12 { ev2 } else { s.event },
+                a,
+                b,
+                MatchStatus::Finished,
+                Some(at(h, 0)),
+                Some(at(h, 0)),
+                Some(at(h, 30)),
+            )
+            .await,
+        );
+    }
+    // Two picks in the guild, one in another guild: the count is 2.
+    let winner = PickParts {
+        winner_team_id: Some(s.team_a),
+        ..PickParts::default()
+    };
+    picks::save(p, GUILD, ALICE, s.bo3, &winner, at(9, 0))
+        .await
+        .unwrap();
+    picks::save(p, GUILD, BOB, s.bo3, &winner, at(9, 0))
+        .await
+        .unwrap();
+    picks::save(p, "100000000000000002", ALICE, s.bo3, &winner, at(9, 0))
+        .await
+        .unwrap();
+    let upcoming = matches::list_view(p, &query(Segment::Upcoming))
+        .await
+        .unwrap();
+    assert_eq!(upcoming[0].pick_count, 2);
+
+    // Event filter.
+    let only_ev2 = matches::list_view(
+        p,
+        &matches::ListQuery {
+            event_id: Some(ev2),
+            ..query(Segment::Finished)
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ids(&only_ev2), vec![done[2]]);
+
+    // Pages of two, latest first, with the keyset cursor.
+    let mut seen = Vec::new();
+    let mut after = None;
+    loop {
+        let page = matches::list_view(
+            p,
+            &matches::ListQuery {
+                after,
+                limit: 2,
+                ..query(Segment::Finished)
+            },
+        )
+        .await
+        .unwrap();
+        if page.is_empty() {
+            break;
+        }
+        let last = page.last().unwrap();
+        after = Some((last.sort_at.unwrap(), last.m.id));
+        seen.extend(ids(&page));
+    }
+    let mut want = done.clone();
+    want.reverse();
+    assert_eq!(seen, want);
+}
+
+#[tokio::test]
+async fn maps_and_my_picks_for_several_matches() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    let p = &db.pool;
+    let other = match_between(p, s.event, Some(s.team_a), Some(s.team_b), MatchFormat::Bo3).await;
+    let third = match_between(p, s.event, Some(s.team_a), Some(s.team_b), MatchFormat::Bo3).await;
+    for (m, n) in [(s.bo3, 1), (s.bo3, 2), (other, 1), (third, 1)] {
+        matches::upsert_map(
+            p,
+            &MatchMap {
+                match_id: m,
+                number: n,
+                map_name: Some(format!("map{n}")),
+                status: MapStatus::Finished,
+                rounds_a: Some(13),
+                rounds_b: Some(7),
+                winner_team_id: Some(s.team_a),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let maps = matches::maps_for(p, &[s.bo3, other]).await.unwrap();
+    let keys: Vec<_> = maps.iter().map(|m| (m.match_id, m.number)).collect();
+    assert_eq!(keys, vec![(s.bo3, 1), (s.bo3, 2), (other, 1)]);
+    assert!(matches::maps_for(p, &[]).await.unwrap().is_empty());
+
+    let parts = PickParts {
+        winner_team_id: Some(s.team_a),
+        series: Some(SeriesScore { a: 2, b: 1 }),
+        maps: vec![MapPick {
+            map_number: 1,
+            winner_team_id: s.team_a,
+            rounds: None,
+            overtime: true,
+        }],
+    };
+    let mine = picks::save(p, GUILD, ALICE, s.bo3, &parts, at(9, 0))
+        .await
+        .unwrap();
+    picks::save(p, GUILD, ALICE, other, &parts, at(9, 0))
+        .await
+        .unwrap();
+    picks::save(p, GUILD, BOB, third, &parts, at(9, 0))
+        .await
+        .unwrap();
+    picks::upsert_result(p, &result(mine.id, 5, ResultState::Final, 1))
+        .await
+        .unwrap();
+
+    let mut conn = p.acquire().await.unwrap();
+    let got = picks::for_user_matches(&mut conn, GUILD, ALICE, &[s.bo3, other, third])
+        .await
+        .unwrap();
+    assert_eq!(got.len(), 2);
+    assert_eq!(got[0].0.match_id, s.bo3);
+    assert_eq!(got[0].0.parts, parts);
+    assert_eq!(got[0].1.as_ref().map(|r| r.points), Some(5));
+    assert_eq!(got[1].0.match_id, other);
+    assert_eq!(got[1].1, None);
+
+    let guild_results = picks::results_for_guild_match(p, GUILD, s.bo3)
+        .await
+        .unwrap();
+    assert_eq!(guild_results.len(), 1);
+    assert!(
+        picks::results_for_guild_match(p, "100000000000000002", s.bo3)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

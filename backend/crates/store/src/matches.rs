@@ -2,7 +2,8 @@
 
 use chrono::{DateTime, Utc};
 use domain::{
-    BracketPos, EventId, Feed, Match, MatchFields, MatchId, MatchMap, NewMatch, StageId, TeamId,
+    BracketPos, EventId, Feed, Match, MatchFields, MatchId, MatchMap, NewMatch, StageId, Team,
+    TeamId,
 };
 use sqlx::sqlite::SqliteRow;
 use sqlx::{Row, SqliteExecutor};
@@ -250,6 +251,200 @@ pub async fn list_maps(ex: impl SqliteExecutor<'_>, match_id: MatchId) -> DbResu
         " FROM maps WHERE match_id = ? ORDER BY number"
     ))
     .bind(match_id.0)
+    .try_map(map_from_row)
+    .fetch_all(ex)
+    .await
+}
+
+// ---- match list for the Activity (T12) -----------------------------------------
+
+/// A segment of the match list (T12). Each has its own statuses, sort key
+/// and direction; see `docs/adr/0012-matches-views.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Segment {
+    /// `scheduled` or `postponed` with a start time up to `bound`; by start
+    /// time, ascending. Overdue matches that are not live yet stay here.
+    Upcoming,
+    /// `live`, by start, ascending. `bound` is ignored.
+    Live,
+    /// `finished` or `canceled` that ended (or started, or were scheduled)
+    /// at or after `bound`; latest first.
+    Finished,
+}
+
+/// What [`list_view`] lists.
+#[derive(Debug, Clone)]
+pub struct ListQuery<'a> {
+    /// Only matches of events this guild follows; pick counts are for it.
+    pub guild_id: &'a str,
+    pub segment: Segment,
+    /// Upper bound of the start (upcoming) or lower bound of the end
+    /// (finished).
+    pub bound: Option<DateTime<Utc>>,
+    pub event_id: Option<EventId>,
+    /// Keyset cursor: list only matches after this `(sort_at, id)`.
+    pub after: Option<(DateTime<Utc>, MatchId)>,
+    pub limit: i64,
+}
+
+/// One match of the list with what a row shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchListItem {
+    pub m: Match,
+    pub event_name: String,
+    pub stage_name: Option<String>,
+    /// `None` while TBD.
+    pub team_a: Option<Team>,
+    pub team_b: Option<Team>,
+    /// Picks for the match in the guild.
+    pub pick_count: i64,
+    /// The segment's sort key; with `m.id` it forms the paging cursor.
+    pub sort_at: Option<DateTime<Utc>>,
+}
+
+/// The list query of one segment. `$key` is the sort key, `$where` the
+/// segment's condition (on `m` and `?3`, the bound), `$cmp`/`$dir` the
+/// cursor comparison and order. Parameters: `?1` guild, `?2` event or NULL,
+/// `?3` bound, `?4`/`?5` cursor time and ID (NULL for the first page),
+/// `?6` limit.
+macro_rules! list_sql {
+    ($key:literal, $where:literal, $cmp:literal, $dir:literal) => {
+        concat!(
+            "SELECT m.*, e.name AS event_name, s.name AS stage_name, \
+               ta.name AS ta_name, ta.acronym AS ta_acronym, ta.logo_url AS ta_logo_url, \
+               ta.country AS ta_country, \
+               tb.name AS tb_name, tb.acronym AS tb_acronym, tb.logo_url AS tb_logo_url, \
+               tb.country AS tb_country, \
+               (SELECT COUNT(*) FROM picks p WHERE p.guild_id = ?1 AND p.match_id = m.id) \
+                 AS pick_count \
+             FROM (SELECT id, ",
+            field_columns!(),
+            ", ",
+            $key,
+            " AS sort_at FROM matches) m \
+             JOIN followed_events fe ON fe.event_id = m.event_id AND fe.guild_id = ?1 \
+             JOIN events e ON e.id = m.event_id \
+             LEFT JOIN stages s ON s.id = m.stage_id \
+             LEFT JOIN teams ta ON ta.id = m.team_a_id \
+             LEFT JOIN teams tb ON tb.id = m.team_b_id \
+             WHERE ",
+            $where,
+            " AND (?2 IS NULL OR m.event_id = ?2) \
+               AND (?4 IS NULL OR m.sort_at ",
+            $cmp,
+            " ?4 OR (m.sort_at = ?4 AND m.id ",
+            $cmp,
+            " ?5)) \
+             ORDER BY m.sort_at ",
+            $dir,
+            ", m.id ",
+            $dir,
+            " LIMIT ?6"
+        )
+    };
+}
+
+const UPCOMING_SQL: &str = list_sql!(
+    "scheduled_at",
+    "m.status IN ('scheduled', 'postponed') AND m.sort_at IS NOT NULL \
+     AND (?3 IS NULL OR m.sort_at <= ?3)",
+    ">",
+    "ASC"
+);
+const LIVE_SQL: &str = list_sql!(
+    "coalesce(started_at, scheduled_at, '')",
+    "m.status = 'live' AND (?3 IS NULL OR TRUE)",
+    ">",
+    "ASC"
+);
+const FINISHED_SQL: &str = list_sql!(
+    "coalesce(ended_at, started_at, scheduled_at)",
+    "m.status IN ('finished', 'canceled') AND m.sort_at IS NOT NULL \
+     AND (?3 IS NULL OR m.sort_at >= ?3)",
+    "<",
+    "DESC"
+);
+
+fn team_from_prefixed(row: &SqliteRow, prefix: &str, id: Option<TeamId>) -> DbResult<Option<Team>> {
+    let Some(id) = id else { return Ok(None) };
+    let col = |c: &str| format!("{prefix}_{c}");
+    Ok(Some(Team {
+        id,
+        name: row.try_get(col("name").as_str())?,
+        acronym: row.try_get(col("acronym").as_str())?,
+        logo_url: row.try_get(col("logo_url").as_str())?,
+        country: row.try_get(col("country").as_str())?,
+    }))
+}
+
+fn list_item_from_row(row: SqliteRow) -> DbResult<MatchListItem> {
+    let event_name = row.try_get("event_name")?;
+    let stage_name = row.try_get("stage_name")?;
+    let pick_count = row.try_get("pick_count")?;
+    // An empty string is the live key of a match without any time.
+    let sort_at: Option<String> = row.try_get("sort_at")?;
+    let sort_at = sort_at
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            DateTime::parse_from_rfc3339(&s)
+                .map(|t| t.with_timezone(&Utc))
+                .map_err(|e| sqlx::Error::ColumnDecode {
+                    index: "sort_at".to_owned(),
+                    source: Box::new(e),
+                })
+        })
+        .transpose()?;
+    let team_a_id = row.try_get::<Option<i64>, _>("team_a_id")?.map(TeamId);
+    let team_b_id = row.try_get::<Option<i64>, _>("team_b_id")?.map(TeamId);
+    let team_a = team_from_prefixed(&row, "ta", team_a_id)?;
+    let team_b = team_from_prefixed(&row, "tb", team_b_id)?;
+    Ok(MatchListItem {
+        m: from_row(row)?,
+        event_name,
+        stage_name,
+        team_a,
+        team_b,
+        pick_count,
+        sort_at,
+    })
+}
+
+/// The matches of one segment of the list (T12), only of events the guild
+/// follows, with event, stage, teams and the guild's pick count.
+pub async fn list_view(
+    ex: impl SqliteExecutor<'_>,
+    q: &ListQuery<'_>,
+) -> DbResult<Vec<MatchListItem>> {
+    let sql = match q.segment {
+        Segment::Upcoming => UPCOMING_SQL,
+        Segment::Live => LIVE_SQL,
+        Segment::Finished => FINISHED_SQL,
+    };
+    sqlx::query(sql)
+        .bind(q.guild_id)
+        .bind(q.event_id.map(|e| e.0))
+        .bind(Ts::opt(q.bound))
+        .bind(q.after.map(|(t, _)| Ts(t)))
+        .bind(q.after.map(|(_, id)| id.0))
+        .bind(q.limit)
+        .try_map(list_item_from_row)
+        .fetch_all(ex)
+        .await
+}
+
+/// The maps of several matches, by match and number.
+pub async fn maps_for(
+    ex: impl SqliteExecutor<'_>,
+    match_ids: &[MatchId],
+) -> DbResult<Vec<MatchMap>> {
+    let ids: Vec<i64> = match_ids.iter().map(|m| m.0).collect();
+    sqlx::query(concat!(
+        "SELECT ",
+        map_columns!(),
+        " FROM maps WHERE match_id IN (SELECT value FROM json_each(?)) \
+          ORDER BY match_id, number"
+    ))
+    .bind(sqlx::types::Json(ids))
     .try_map(map_from_row)
     .fetch_all(ex)
     .await

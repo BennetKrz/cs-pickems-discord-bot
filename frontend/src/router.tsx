@@ -1,5 +1,7 @@
 import { createMemoryRouter, Navigate } from 'react-router'
-import { Events, Leaderboard, Matches, Me } from './routes/tabs.tsx'
+import { MatchDetailRoute } from './matches/MatchDetail.tsx'
+import { MatchesView } from './matches/MatchesView.tsx'
+import { Events, Leaderboard, Me } from './routes/tabs.tsx'
 import { Shell } from './shell/Shell.tsx'
 
 /**
@@ -15,7 +17,8 @@ export function createAppRouter(initialPath = '/') {
         element: <Shell />,
         children: [
           { index: true, element: <Navigate to="/matches" replace /> },
-          { path: 'matches', element: <Matches /> },
+          { path: 'matches', element: <MatchesView /> },
+          { path: 'matches/:id', element: <MatchDetailRoute /> },
           { path: 'events', element: <Events /> },
           { path: 'leaderboard', element: <Leaderboard /> },
           { path: 'me', element: <Me /> },

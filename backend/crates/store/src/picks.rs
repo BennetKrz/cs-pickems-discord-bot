@@ -578,3 +578,96 @@ pub async fn delete_results_for_match(
     .await?;
     Ok(res.rows_affected())
 }
+
+/// The results of a guild's picks for one match, by pick ID (T12).
+pub async fn results_for_guild_match(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    match_id: MatchId,
+) -> DbResult<Vec<PickResult>> {
+    sqlx::query(concat!(
+        "SELECT ",
+        result_columns!(),
+        " FROM pick_results r JOIN picks p ON p.id = r.pick_id \
+          WHERE p.guild_id = ? AND p.match_id = ? ORDER BY r.pick_id"
+    ))
+    .bind(guild_id)
+    .bind(match_id.0)
+    .try_map(result_from_row)
+    .fetch_all(ex)
+    .await
+}
+
+/// A member's picks for several matches, with map parts and the result if
+/// one is settled (T12, the match list). In match ID order.
+pub async fn for_user_matches(
+    conn: &mut SqliteConnection,
+    guild_id: &str,
+    user_id: &str,
+    match_ids: &[MatchId],
+) -> DbResult<Vec<(Pick, Option<PickResult>)>> {
+    let ids = Json(match_ids.iter().map(|m| m.0).collect::<Vec<i64>>());
+    let mut picks: Vec<Pick> = sqlx::query(concat!(
+        "SELECT ",
+        pick_columns!(),
+        " FROM picks WHERE guild_id = ? AND user_id = ? \
+          AND match_id IN (SELECT value FROM json_each(?)) ORDER BY match_id"
+    ))
+    .bind(guild_id)
+    .bind(user_id)
+    .bind(&ids)
+    .try_map(pick_from_row)
+    .fetch_all(&mut *conn)
+    .await?;
+    let maps = sqlx::query(
+        "SELECT pm.pick_id, pm.map_number, pm.winner_team_id, pm.rounds_a, pm.rounds_b, \
+           pm.overtime \
+         FROM pick_maps pm JOIN picks p ON p.id = pm.pick_id \
+         WHERE p.guild_id = ? AND p.user_id = ? \
+           AND p.match_id IN (SELECT value FROM json_each(?)) \
+         ORDER BY pm.pick_id, pm.map_number",
+    )
+    .bind(guild_id)
+    .bind(user_id)
+    .bind(&ids)
+    .try_map(map_pick_from_row)
+    .fetch_all(&mut *conn)
+    .await?;
+    attach_maps(&mut picks, maps);
+    let mut results: HashMap<PickId, PickResult> = sqlx::query(concat!(
+        "SELECT ",
+        result_columns!(),
+        " FROM pick_results r JOIN picks p ON p.id = r.pick_id \
+          WHERE p.guild_id = ? AND p.user_id = ? \
+            AND p.match_id IN (SELECT value FROM json_each(?))"
+    ))
+    .bind(guild_id)
+    .bind(user_id)
+    .bind(&ids)
+    .try_map(result_from_row)
+    .fetch_all(&mut *conn)
+    .await?
+    .into_iter()
+    .map(|r| (r.pick_id, r))
+    .collect();
+    Ok(picks
+        .into_iter()
+        .map(|p| {
+            let r = results.remove(&p.id);
+            (p, r)
+        })
+        .collect())
+}
+
+/// Number of picks for a match in a guild (T12).
+pub async fn count_for_match(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    match_id: MatchId,
+) -> DbResult<i64> {
+    sqlx::query_scalar("SELECT COUNT(*) FROM picks WHERE guild_id = ? AND match_id = ?")
+        .bind(guild_id)
+        .bind(match_id.0)
+        .fetch_one(ex)
+        .await
+}

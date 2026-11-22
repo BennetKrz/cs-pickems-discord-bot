@@ -28,5 +28,7 @@ export default defineConfig(({ mode }) => ({
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
     restoreMocks: true,
+    // A non-UTC zone, so tests catch times shown in UTC instead of local time.
+    env: { TZ: 'Europe/Berlin' },
   },
 }))

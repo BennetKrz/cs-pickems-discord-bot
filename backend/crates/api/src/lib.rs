@@ -4,8 +4,10 @@
 //! - `GET /healthz` – liveness and DB check, no auth.
 //! - `/api/auth/*` – sign-in through the Activity (T07), see [`auth`].
 //! - `GET /api/me` – the signed-in member (T07), see [`me`].
+//! - `GET /api/matches`, `GET /api/matches/{id}` – the match list and match
+//!   detail (T12), see [`matches`].
 //! - `PUT|DELETE /api/matches/{id}/pick`, `GET /api/matches/{id}/picks`,
-//!   `GET /api/me/picks` – picks (T10), see [`picks`].
+//!   `GET /api/me/picks` – picks (T10), with points (T12), see [`picks`].
 //! - `/api/img/*` – avatars and team logos through the image proxy (T07),
 //!   see [`img`]. No session needed.
 //! - `/api/admin/*` – admin actions on match data (T05), the sync status
@@ -13,7 +15,9 @@
 //! - `/api/dev/*` – dev builds only (feature `dev`): dev sign-in (T07) and
 //!   the fixture clock (T05).
 //! - `/api/*` – unknown paths answer a JSON 404. Every JSON `GET` gets an
-//!   ETag ([`etag`]).
+//!   ETag ([`etag`]). Every response, 304s included, carries
+//!   `X-Server-Time` ([`SERVER_TIME`]), so the Activity can time lock
+//!   countdowns on the server's clock (T12).
 //! - everything else – the built frontend (`frontend/dist`). The Activity
 //!   uses an in-memory router and always loads at `/`, so there is no SPA
 //!   fallback: unknown files are a plain 404.
@@ -28,6 +32,7 @@ pub mod dev;
 pub mod error;
 pub mod etag;
 pub mod img;
+pub mod matches;
 pub mod me;
 pub mod picks;
 pub mod ratelimit;
@@ -37,8 +42,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::State;
-use axum::http::StatusCode;
+use axum::extract::{Request, State};
+use axum::http::{HeaderValue, StatusCode};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -61,6 +67,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const GIT_SHA: &str = env!("GIT_SHA");
 
 const DB_PING_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Response header with the server's "now" (`AppState::clock`, so the fake
+/// clock in fixture mode) as RFC 3339 UTC with milliseconds.
+pub const SERVER_TIME: &str = "x-server-time";
 
 /// Shared state for all handlers.
 #[derive(Clone)]
@@ -150,6 +160,7 @@ pub fn router_with(state: AppState, static_dir: &Path, extra: Router<AppState>) 
     let api = Router::new()
         .nest("/auth", ratelimit::limit(auth::routes(), ratelimit::AUTH))
         .merge(me::routes())
+        .merge(matches::routes())
         .merge(picks::routes())
         .nest("/img", img::routes())
         .nest(
@@ -158,7 +169,12 @@ pub fn router_with(state: AppState, static_dir: &Path, extra: Router<AppState>) 
         )
         .merge(extra)
         .fallback(api_not_found)
-        .layer(axum::middleware::from_fn(etag::layer));
+        .layer(axum::middleware::from_fn(etag::layer))
+        // Outside the ETag layer, so the 304s it builds get the header too.
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            server_time,
+        ));
 
     Router::new()
         .route("/healthz", get(healthz))
@@ -212,6 +228,16 @@ async fn healthz(State(state): State<AppState>) -> (StatusCode, Json<Health>) {
             db: if db_ok { "ok" } else { "error" },
         }),
     )
+}
+
+/// Sets [`SERVER_TIME`] on every `/api` response.
+async fn server_time(State(st): State<AppState>, req: Request, next: Next) -> Response {
+    let mut res = next.run(req).await;
+    let now = store::format_ts(&st.clock.now());
+    if let Ok(v) = HeaderValue::from_str(&now) {
+        res.headers_mut().insert(SERVER_TIME, v);
+    }
+    res
 }
 
 async fn api_not_found() -> Response {

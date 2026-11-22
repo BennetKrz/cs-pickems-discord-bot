@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiClient, ApiError, PICK_LOCKED, matchPicksPath, type MyPick } from './api.ts'
+import {
+  ApiClient,
+  ApiError,
+  PICK_LOCKED,
+  matchesPath,
+  matchPath,
+  matchPicksPath,
+  type MyPick,
+} from './api.ts'
 import { fakeResponse, header, mockFetch } from './test-utils.ts'
 
 const SAVED: MyPick = {
@@ -67,5 +75,16 @@ describe('pick API', () => {
 
   it('builds the poll path of a match', () => {
     expect(matchPicksPath(42)).toBe('/api/matches/42/picks')
+  })
+})
+
+describe('match paths', () => {
+  it('build the list and detail URLs', () => {
+    expect(matchesPath('upcoming')).toBe('/api/matches?state=upcoming')
+    expect(matchesPath('finished', { eventId: 3, cursor: '1700000000000_9' })).toBe(
+      '/api/matches?state=finished&event_id=3&cursor=1700000000000_9',
+    )
+    expect(matchesPath('live', { cursor: null })).toBe('/api/matches?state=live')
+    expect(matchPath(12)).toBe('/api/matches/12')
   })
 })
