@@ -1,9 +1,11 @@
 import { createMemoryRouter, Navigate } from 'react-router'
+import { EventDetailRoute } from './events/EventDetail.tsx'
+import { EventsView } from './events/EventsView.tsx'
 import { LeaderboardView } from './leaderboard/LeaderboardView.tsx'
 import { MatchDetailRoute } from './matches/MatchDetail.tsx'
 import { MatchesView } from './matches/MatchesView.tsx'
 import { MemberProfile } from './members/MemberProfile.tsx'
-import { Events, Me } from './routes/tabs.tsx'
+import { Me } from './routes/tabs.tsx'
 import { Shell } from './shell/Shell.tsx'
 
 /**
@@ -22,7 +24,8 @@ export function createAppRouter(initialPath = '/') {
           { index: true, element: <Navigate to="/matches" replace /> },
           { path: 'matches', element: <MatchesView /> },
           { path: 'matches/:id', element: <MatchDetailRoute /> },
-          { path: 'events', element: <Events /> },
+          { path: 'events', element: <EventsView /> },
+          { path: 'events/:id', element: <EventDetailRoute /> },
           { path: 'leaderboard', element: <LeaderboardView /> },
           { path: 'me', element: <Me /> },
           { path: 'members/:id', element: <MemberProfile /> },

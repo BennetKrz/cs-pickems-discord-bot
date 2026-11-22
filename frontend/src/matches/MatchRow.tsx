@@ -7,6 +7,7 @@ import {
   formatTime,
   teamName,
 } from './format.ts'
+import type { BackTo } from '../nav.ts'
 import { pointsLabel } from './summary.ts'
 import { TeamLogo } from './TeamLogo.tsx'
 
@@ -46,8 +47,8 @@ function Center({ row }: { row: Row }) {
   )
 }
 
-/** The status line under the teams: live badge, lock countdown, or state. */
-function Status({ row, now }: { row: Row; now: number }) {
+/** The status tag: live badge, lock countdown, or state. Also used in brackets (T13). */
+export function StatusTag({ row, now }: { row: Row; now: number }) {
   if (row.voided) return <span className="tag tag-muted">Void</span>
   switch (row.status) {
     case 'live':
@@ -70,14 +71,31 @@ function Status({ row, now }: { row: Row; now: number }) {
   }
 }
 
-/** One match in the list; opens the match detail. */
-export function MatchRow({ row, now }: { row: Row; now: number }) {
+/** My pick on a match: points once it is over, else none, partial or full. */
+export function PickTag({ row }: { row: Row }) {
+  const done = row.status === 'finished' || row.status === 'canceled'
+  if (done && row.my_result) {
+    return (
+      <span className="tag tag-points">
+        {pointsLabel(row.my_result.points, row.my_result.state)}
+      </span>
+    )
+  }
+  return (
+    <span className={`tag tag-pick tag-pick-${row.my_pick}`}>{MY_PICK_LABEL[row.my_pick]}</span>
+  )
+}
+
+/**
+ * One match in the list; opens the match detail. With `back`, the detail's
+ * back link returns there (T13).
+ */
+export function MatchRow({ row, now, back }: { row: Row; now: number; back?: BackTo }) {
   const winnerA = row.winner_team_id !== null && row.winner_team_id === row.team_a?.id
   const winnerB = row.winner_team_id !== null && row.winner_team_id === row.team_b?.id
-  const done = row.status === 'finished' || row.status === 'canceled'
   return (
     <li>
-      <Link to={`/matches/${row.id}`} className="match-row">
+      <Link to={`/matches/${row.id}`} state={back ? { back } : undefined} className="match-row">
         <span className={`row-team row-team-a${winnerA ? ' is-winner' : ''}`}>
           <span className="row-team-name">{teamName(row.team_a)}</span>
           <TeamLogo team={row.team_a} />
@@ -94,16 +112,8 @@ export function MatchRow({ row, now }: { row: Row; now: number }) {
             {` · ${row.pick_count} ${row.pick_count === 1 ? 'pick' : 'picks'}`}
           </span>
           <span className="row-tags">
-            <Status row={row} now={now} />
-            {done && row.my_result ? (
-              <span className="tag tag-points">
-                {pointsLabel(row.my_result.points, row.my_result.state)}
-              </span>
-            ) : (
-              <span className={`tag tag-pick tag-pick-${row.my_pick}`}>
-                {MY_PICK_LABEL[row.my_pick]}
-              </span>
-            )}
+            <StatusTag row={row} now={now} />
+            <PickTag row={row} />
           </span>
         </span>
       </Link>

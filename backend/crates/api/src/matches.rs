@@ -70,7 +70,7 @@ pub struct TeamRef {
 }
 
 impl TeamRef {
-    fn new(t: &Team) -> Self {
+    pub(crate) fn new(t: &Team) -> Self {
         Self {
             id: t.id.0,
             name: t.name.clone(),
@@ -340,24 +340,13 @@ async fn list(
     } else {
         None
     };
-    let ids: Vec<MatchId> = items.iter().map(|i| i.m.id).collect();
-    let maps = store::matches::maps_for(&mut *tx, &ids).await.map_err(db)?;
-    let mine = store::picks::for_user_matches(&mut tx, &member.guild_id, &member.user_id, &ids)
-        .await
-        .map_err(db)?;
+    let ctx = RowContext::load(&mut tx, &member, &items).await?;
     tx.commit().await.map_err(db)?;
 
-    let mut maps_by_match: HashMap<MatchId, Vec<MatchMap>> = HashMap::new();
-    for m in maps {
-        maps_by_match.entry(m.match_id).or_default().push(m);
-    }
-    let mine: HashMap<MatchId, _> = mine
-        .into_iter()
-        .map(|(p, r)| (p.match_id, (p, r)))
-        .collect();
     let matches = items
         .iter()
-        .map(|item| row(item, &maps_by_match, &mine, now))
+        // The list only has followed events.
+        .map(|item| ctx.row(item, true, now))
         .collect();
     Ok(Json(MatchList {
         state,
@@ -367,10 +356,56 @@ async fn list(
     }))
 }
 
+/// What rows need beyond their [`MatchListItem`]: the maps and the
+/// caller's picks. Shared with the event view (T13).
+pub(crate) struct RowContext {
+    pub maps: HashMap<MatchId, Vec<MatchMap>>,
+    pub mine: HashMap<MatchId, (domain::Pick, Option<PickResult>)>,
+}
+
+impl RowContext {
+    pub(crate) async fn load(
+        conn: &mut sqlx::SqliteConnection,
+        member: &Member,
+        items: &[MatchListItem],
+    ) -> Result<Self, ApiError> {
+        let ids: Vec<MatchId> = items.iter().map(|i| i.m.id).collect();
+        let maps = store::matches::maps_for(&mut *conn, &ids)
+            .await
+            .map_err(db)?;
+        let mine = store::picks::for_user_matches(conn, &member.guild_id, &member.user_id, &ids)
+            .await
+            .map_err(db)?;
+        let mut by_match: HashMap<MatchId, Vec<MatchMap>> = HashMap::new();
+        for m in maps {
+            by_match.entry(m.match_id).or_default().push(m);
+        }
+        Ok(Self {
+            maps: by_match,
+            mine: mine
+                .into_iter()
+                .map(|(p, r)| (p.match_id, (p, r)))
+                .collect(),
+        })
+    }
+
+    /// The maps of one match, by number.
+    pub(crate) fn maps_of(&self, id: MatchId) -> &[MatchMap] {
+        self.maps.get(&id).map_or(&[], Vec::as_slice)
+    }
+
+    /// The row of `item`; `followed` says whether the guild follows its
+    /// event (else it is not pickable).
+    pub(crate) fn row(&self, item: &MatchListItem, followed: bool, now: DateTime<Utc>) -> MatchRow {
+        row(item, &self.maps, &self.mine, followed, now)
+    }
+}
+
 fn row(
     item: &MatchListItem,
     maps: &HashMap<MatchId, Vec<MatchMap>>,
     mine: &HashMap<MatchId, (domain::Pick, Option<PickResult>)>,
+    followed: bool,
     now: DateTime<Utc>,
 ) -> MatchRow {
     let m = &item.m;
@@ -389,8 +424,7 @@ fn row(
         team_b: item.team_b.as_ref(),
         maps: maps.get(&m.id).map_or(&[], Vec::as_slice),
         pick_count: item.pick_count,
-        // The list only has followed events.
-        followed: true,
+        followed,
         now,
     });
     let (my_pick, my_result) = match mine.get(&m.id) {

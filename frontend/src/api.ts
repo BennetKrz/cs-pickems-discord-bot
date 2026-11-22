@@ -297,6 +297,103 @@ export function leaderboardPath(eventId: number | null = null): string {
   return eventId === null ? '/api/leaderboard' : `/api/leaderboard?event_id=${eventId}`
 }
 
+// ---- events (T13) -----------------------------------------------------------
+
+export type EventStatus = 'upcoming' | 'running' | 'finished' | 'canceled'
+export type EventTier = 's' | 'a' | 'b' | 'c' | 'd' | 'unknown'
+export type StageKind = 'swiss' | 'groups' | 'single_elim' | 'double_elim' | 'other'
+export type BracketSide = 'upper' | 'lower' | 'final'
+export type FeedOutcome = 'winner' | 'loser'
+
+export interface EventInfo {
+  id: number
+  name: string
+  tier: EventTier
+  status: EventStatus
+  begin_at: string | null
+  end_at: string | null
+}
+
+/** One followed event in `GET /api/events`. */
+export interface EventSummary extends EventInfo {
+  /** Matches of any state. */
+  matches: number
+  /** Matches being played now. */
+  live: number
+  /** Picks this server made on the event. */
+  picks: number
+}
+
+/** Answer of `GET /api/events`: running first, then upcoming, then finished. */
+export interface EventList {
+  events: EventSummary[]
+}
+
+/** A team slot fed by the winner or loser of another match. */
+export interface FeedRef {
+  match_id: number
+  outcome: FeedOutcome
+}
+
+/** Where a match sits in an elimination tree. */
+export interface BracketPos {
+  side: BracketSide
+  /** Column within the side, from 0. */
+  round: number
+  /** Row within the column, from 0. */
+  slot: number
+  /** Derived from the feeds rather than stored by the source. */
+  derived: boolean
+  feeds_a: FeedRef | null
+  feeds_b: FeedRef | null
+}
+
+/** A match of a stage: a list row plus its place in the stage. */
+export interface StageMatch extends MatchRow {
+  /** Set in a `bracket` stage. */
+  bracket: BracketPos | null
+  /** The round, from 1, in a `standings` stage. */
+  round: number | null
+}
+
+export interface StandingRow {
+  team: TeamRef
+  wins: number
+  losses: number
+  map_diff: number
+  round_diff: number
+}
+
+/** How a stage is shown. */
+export type StageViewKind = 'bracket' | 'standings' | 'list'
+
+export interface StageView {
+  /** `null` for matches without a stage. */
+  id: number | null
+  name: string
+  kind: StageKind | null
+  view: StageViewKind
+  /** Set in a `standings` stage, best first. */
+  standings: StandingRow[] | null
+  /** By start time (unscheduled last). */
+  matches: StageMatch[]
+}
+
+/** Answer of `GET /api/events/{id}`. */
+export interface EventDetail {
+  event: EventInfo
+  /** This server follows the event: its matches can be picked. */
+  followed: boolean
+  stages: StageView[]
+}
+
+export const EVENTS_PATH = '/api/events'
+
+/** Path of one event. */
+export function eventPath(eventId: number): string {
+  return `/api/events/${eventId}`
+}
+
 /** Error codes of the pick API. */
 export const PICK_LOCKED = 'pick_locked'
 export const NOT_PICKABLE = 'not_pickable'

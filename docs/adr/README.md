@@ -25,3 +25,4 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | [0014](0014-followed-events.md) | Followed events | accepted |
 | [0015](0015-backups.md) | Backups | accepted |
 | [0016](0016-leaderboard.md) | Leaderboard: tie-break, match days and rank change | accepted |
+| [0017](0017-event-view-and-brackets.md) | Event view: bracket positions, Swiss rounds and standings | accepted |

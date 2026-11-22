@@ -283,6 +283,7 @@ mod tests {
             followed_by: "200000000000000001".into(),
             followed_at: t(19),
             matches: 1,
+            live: 0,
             picks: 0,
         }]);
         assert_eq!(p.fields[0].name, "IEM Cologne");

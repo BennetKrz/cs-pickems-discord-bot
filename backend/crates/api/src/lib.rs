@@ -8,6 +8,8 @@
 //!   detail (T12), see [`matches`].
 //! - `PUT|DELETE /api/matches/{id}/pick`, `GET /api/matches/{id}/picks`,
 //!   `GET /api/me/picks` – picks (T10), with points (T12), see [`picks`].
+//! - `GET /api/events`, `GET /api/events/{id}` – followed events and one
+//!   event with its stages, brackets and standings (T13), see [`events`].
 //! - `GET /api/leaderboard?event_id=` – the server leaderboard (T14), see
 //!   [`leaderboard`].
 //! - `/api/img/*` – avatars and team logos through the image proxy (T07),
@@ -33,6 +35,7 @@ pub mod auth;
 pub mod dev;
 pub mod error;
 pub mod etag;
+pub mod events;
 pub mod img;
 pub mod leaderboard;
 pub mod matches;
@@ -164,6 +167,7 @@ pub fn router_with(state: AppState, static_dir: &Path, extra: Router<AppState>) 
         .nest("/auth", ratelimit::limit(auth::routes(), ratelimit::AUTH))
         .merge(me::routes())
         .merge(matches::routes())
+        .merge(events::routes())
         .merge(picks::routes())
         .merge(leaderboard::routes())
         .nest("/img", img::routes())
