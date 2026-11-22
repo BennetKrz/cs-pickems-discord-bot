@@ -3,6 +3,7 @@
 //! - [`scheduler`]: decides which external calls to make, by match state and
 //!   within each source's [`budget`], and keeps followed events fresh (T06).
 //! - [`lock`]: the lock ticker that locks picks once a match starts (T06).
+//! - [`follow`]: following and unfollowing events per guild (T09).
 //! - [`handle`]: how other components trigger a sync, search events and
 //!   read the counters.
 //! - [`reconcile`]: turns source DTOs into canonical data, by field
@@ -15,6 +16,7 @@
 pub mod budget;
 pub mod bus;
 pub mod config;
+pub mod follow;
 pub mod handle;
 pub mod lock;
 pub mod manual;
@@ -26,6 +28,7 @@ pub mod settle;
 pub use budget::Priority;
 pub use bus::EventBus;
 pub use config::{BudgetLimits, SyncConfig};
+pub use follow::{FollowError, FollowOutcome, UnfollowOutcome};
 pub use handle::{JobStatus, SearchHit, SearchOutcome, SourceStatus, SyncHandle, SyncStatus};
 pub use lock::run_lock_ticker;
 pub use manual::{ManualError, ManualService, Outcome, Override, OverrideField};

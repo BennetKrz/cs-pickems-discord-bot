@@ -51,7 +51,7 @@ flowchart LR
 | Domain | `domain` | Types, pick validation, scoring, achievements, the admin rule. Pure functions, no I/O. | T07, T10, T11, P6 |
 | Store | `store` | sqlx repositories and migrations. | T02 |
 | Sources | `sources` | `SourceAdapter` trait and adapters (PandaScore, manual, fixture). Fetch and convert only, never write the DB. | T03–T05 |
-| Sync | `sync` | Scheduler with API budget, reconciler, lock ticker, domain events. | T03, T06 |
+| Sync | `sync` | Scheduler with API budget, reconciler, lock ticker, domain events, following events. | T03, T06, T09 |
 | HTTP API | `api` | Auth (Discord OAuth via Embedded App SDK), JSON API, image proxy, static frontend. | T07, T10, T12–T15 |
 | Bot | `bot` | Slash commands, channel posts, Activity launch. | T08, T09 |
 | App | `app` | Binary: config, wiring, graceful shutdown, CLI subcommands. | T01 |

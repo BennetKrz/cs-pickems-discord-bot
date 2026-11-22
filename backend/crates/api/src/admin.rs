@@ -779,6 +779,7 @@ mod tests {
                     per_hour: 500,
                     per_minute: 30,
                 }),
+                search_only: false,
             }],
             seed: Some(1),
         })

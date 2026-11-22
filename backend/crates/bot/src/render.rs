@@ -11,6 +11,8 @@ use serde::Serialize;
 use store::bot::TopPicker;
 use store::matches::MatchListItem;
 
+pub mod events;
+
 /// Custom ID of the button that opens the Activity.
 pub const LAUNCH_ID: &str = "launch";
 /// Prefix of the custom ID of a button that opens the Activity on a match.
@@ -67,7 +69,7 @@ impl ButtonAction {
     }
 }
 
-fn launch_button() -> Button {
+pub(crate) fn launch_button() -> Button {
     Button {
         label: "Open Pick'em".to_owned(),
         custom_id: LAUNCH_ID.to_owned(),
@@ -93,7 +95,7 @@ fn buttons(verb: &str, items: &[&MatchListItem]) -> Vec<Button> {
     out
 }
 
-fn truncate(s: &str, max_chars: usize) -> String {
+pub(crate) fn truncate(s: &str, max_chars: usize) -> String {
     if s.chars().count() <= max_chars {
         return s.to_owned();
     }
@@ -135,11 +137,11 @@ pub fn ts(t: DateTime<Utc>, style: char) -> String {
     format!("<t:{}:{style}>", t.timestamp())
 }
 
-fn plural(n: i64, one: &str, many: &str) -> String {
+pub(crate) fn plural(n: i64, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
-fn pick_count(n: i64) -> String {
+pub(crate) fn pick_count(n: i64) -> String {
     if n == 0 {
         "no picks yet".to_owned()
     } else {

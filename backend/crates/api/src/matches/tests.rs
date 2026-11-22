@@ -666,3 +666,63 @@ async fn fixture_lifecycle_moves_a_match_through_the_segments() {
         (json!(2), json!(1))
     );
 }
+
+/// T09, AC 1: with the fixture source, `/event search` finds the event and
+/// following the chosen result makes its matches appear in the list the
+/// Activity polls (every 60 s when idle), pickable where teams are known.
+#[tokio::test]
+async fn following_the_fixture_event_from_search_fills_the_list() {
+    use crate::dev::{FixtureDriver, Scenario};
+    use sources::fixture::FIXTURE;
+    use sync::{Scheduler, SchedulerParts, SourceEntry, SyncConfig};
+
+    let app = auth_app(None).await;
+    let rec = crate::test_util::reconciler(app.pool.clone(), &[FIXTURE]);
+    let d = Arc::new(
+        FixtureDriver::open(
+            app.pool.clone(),
+            rec.clone(),
+            Scenario::default_scenario(),
+            t0(),
+        )
+        .await
+        .unwrap(),
+    );
+    d.sync().await.unwrap();
+    // As the app wires it in dev: the fixture source answers searches only.
+    let (_scheduler, handle) = Scheduler::open(SchedulerParts {
+        reconciler: rec.clone(),
+        clock: app.clock.clone(),
+        config: SyncConfig::default(),
+        sources: vec![SourceEntry {
+            adapter: d.adapter(),
+            budget: None,
+            search_only: true,
+        }],
+        seed: Some(1),
+    })
+    .await
+    .unwrap();
+    let token = app.sign_in(ALICE, GUILD).await;
+    assert!(ids(&list(&app, &token, "state=upcoming").await).is_empty());
+
+    let name = d.adapter().event().name;
+    let query = name.split_whitespace().next().unwrap();
+    let out = handle.search(query).await;
+    assert_eq!(out.hits.len(), 1, "{out:?}");
+    assert_eq!(out.hits[0].source, FIXTURE);
+    let followed = sync::follow::follow_hit(&rec, Some(&handle), GUILD, OWNER, &out.hits[0], t0())
+        .await
+        .unwrap();
+    assert!(followed.newly_followed);
+    assert_eq!(followed.event.name, name);
+
+    let up = list(&app, &token, "state=upcoming").await;
+    let rows = up["matches"].as_array().unwrap();
+    assert!(!rows.is_empty(), "{up}");
+    assert!(rows.iter().all(|m| m["event"]["name"] == name), "{up}");
+    assert!(rows.iter().any(|m| m["pickable"] == true), "{up}");
+    // Another guild still sees nothing.
+    let theirs = app.sign_in(ALICE, OTHER_GUILD).await;
+    assert!(ids(&list(&app, &theirs, "state=upcoming").await).is_empty());
+}

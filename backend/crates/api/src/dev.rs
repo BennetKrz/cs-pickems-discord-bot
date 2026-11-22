@@ -64,7 +64,7 @@ struct Saved {
 pub struct FixtureDriver {
     pool: SqlitePool,
     reconciler: Arc<Reconciler>,
-    adapter: FixtureAdapter,
+    adapter: Arc<FixtureAdapter>,
     clock: Arc<FakeClock>,
     /// Serializes syncs and clock moves.
     busy: Mutex<()>,
@@ -94,7 +94,7 @@ impl FixtureDriver {
             }
         };
         let clock = Arc::new(FakeClock::new(saved.clock));
-        let adapter = FixtureAdapter::new(scenario, saved.anchor, clock.clone());
+        let adapter = Arc::new(FixtureAdapter::new(scenario, saved.anchor, clock.clone()));
         let driver = Self {
             pool,
             reconciler,
@@ -113,6 +113,13 @@ impl FixtureDriver {
 
     pub fn anchor(&self) -> DateTime<Utc> {
         self.adapter.anchor()
+    }
+
+    /// The fixture source, for searches (T09): the app passes it to the sync
+    /// scheduler as a search-only source, so `/event search` finds the
+    /// fixture event. Its sync stays with this driver.
+    pub fn adapter(&self) -> Arc<FixtureAdapter> {
+        self.adapter.clone()
     }
 
     /// Syncs the scenario at the current clock.

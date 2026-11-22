@@ -5,9 +5,10 @@
 //! every parent command.
 //!
 //! Commands are registered as guild commands, so changes show up at once.
-//! T09 adds `/event …` the same way.
+//! `/event …` (T09) sits next to `/admin`, behind the same check.
 
 pub mod admin;
+pub mod event;
 pub mod member;
 
 use std::sync::Arc;
@@ -46,7 +47,12 @@ pub fn user(msg: impl Into<String>) -> Error {
 
 /// Every command the bot registers.
 pub fn commands() -> Vec<poise::Command<Data, Error>> {
-    vec![member::leaderboard(), member::mypicks(), admin::admin()]
+    vec![
+        member::leaderboard(),
+        member::mypicks(),
+        admin::admin(),
+        event::event(),
+    ]
 }
 
 /// Whether the member behind an interaction is an admin: the rule of T07
@@ -181,14 +187,17 @@ mod tests {
     #[test]
     fn every_admin_command_is_behind_the_admin_check() {
         let cmds = commands();
-        let admin = cmds.iter().find(|c| c.name == "admin").unwrap();
-        assert_eq!(admin.checks.len(), 1, "/admin has exactly the admin check");
-        assert!(admin.guild_only);
+        for root in ["admin", "event"] {
+            let c = cmds.iter().find(|c| c.name == root).unwrap();
+            assert_eq!(c.checks.len(), 1, "/{root} has exactly the admin check");
+            assert!(c.guild_only, "/{root}");
+        }
 
         let mut all = Vec::new();
         leaves(&cmds, "", false, &mut all);
-        let (admin_cmds, member_cmds): (Vec<_>, Vec<_>) =
-            all.iter().partition(|(p, _)| p.starts_with("/admin/"));
+        let (admin_cmds, member_cmds): (Vec<_>, Vec<_>) = all
+            .iter()
+            .partition(|(p, _)| p.starts_with("/admin/") || p.starts_with("/event/"));
         for (p, guarded) in &admin_cmds {
             assert!(guarded, "{p} is not guarded");
         }
@@ -211,6 +220,10 @@ mod tests {
                 "/admin/match/void",
                 "/admin/match/unvoid",
                 "/admin/match/reopen",
+                "/event/search",
+                "/event/follow",
+                "/event/unfollow",
+                "/event/list",
             ]
         );
     }

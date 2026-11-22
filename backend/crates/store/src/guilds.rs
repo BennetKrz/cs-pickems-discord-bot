@@ -284,3 +284,52 @@ pub async fn is_followed(
     .fetch_one(ex)
     .await
 }
+
+/// One followed event with what `/event list` shows (T09).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FollowedOverview {
+    pub event: domain::Event,
+    pub followed_by: String,
+    pub followed_at: DateTime<Utc>,
+    /// Matches of the event, of any state.
+    pub matches: i64,
+    /// Picks the guild made on them.
+    pub picks: i64,
+}
+
+/// The events a guild follows with match and pick counts, by start (events
+/// without a start last), then name.
+pub async fn followed_overview(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+) -> DbResult<Vec<FollowedOverview>> {
+    sqlx::query(
+        "SELECT e.id, e.name, e.tier, e.begin_at, e.end_at, e.status, \
+           fe.followed_by, fe.followed_at, \
+           (SELECT COUNT(*) FROM matches m WHERE m.event_id = e.id) AS match_count, \
+           (SELECT COUNT(*) FROM picks p JOIN matches m ON m.id = p.match_id \
+             WHERE m.event_id = e.id AND p.guild_id = ?1) AS pick_count \
+         FROM followed_events fe JOIN events e ON e.id = fe.event_id \
+         WHERE fe.guild_id = ?1 \
+         ORDER BY e.begin_at IS NULL, e.begin_at, e.name, e.id",
+    )
+    .bind(guild_id)
+    .try_map(|row: SqliteRow| {
+        Ok(FollowedOverview {
+            event: domain::Event {
+                id: EventId(row.try_get("id")?),
+                name: row.try_get("name")?,
+                tier: crate::row::enum_col(&row, "tier")?,
+                begin_at: row.try_get("begin_at")?,
+                end_at: row.try_get("end_at")?,
+                status: crate::row::enum_col(&row, "status")?,
+            },
+            followed_by: row.try_get("followed_by")?,
+            followed_at: row.try_get("followed_at")?,
+            matches: row.try_get("match_count")?,
+            picks: row.try_get("pick_count")?,
+        })
+    })
+    .fetch_all(ex)
+    .await
+}

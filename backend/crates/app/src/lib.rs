@@ -52,6 +52,7 @@ pub fn scheduled_sources(config: &Config) -> anyhow::Result<Vec<sync::SourceEntr
                 out.push(sync::SourceEntry {
                     adapter: Arc::new(adapter),
                     budget: budget_of(config, *id),
+                    search_only: false,
                 });
             }
             SourceId::Manual | SourceId::Fixture => {}
@@ -267,6 +268,8 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     let mut state = api::AppState::new(reconciler.clone(), Arc::new(domain::SystemClock))
         .with_auth(auth)
         .with_images(Arc::new(image_proxy(&config)?));
+    #[cfg_attr(not(feature = "dev"), allow(unused_mut))]
+    let mut sync_sources = scheduled_sources(&config)?;
     #[cfg(not(feature = "dev"))]
     let extra_api = axum::Router::new();
     #[cfg(feature = "dev")]
@@ -302,17 +305,25 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                 "fixture scenario loaded; advance with POST /api/dev/clock/advance"
             );
             state.clock = driver.clock();
+            // `/event search` finds the fixture event (T09); the driver
+            // keeps syncing it on the dev clock.
+            sync_sources.push(sync::SourceEntry {
+                adapter: driver.adapter(),
+                budget: None,
+                search_only: true,
+            });
             extra_api = extra_api.merge(api::dev::routes(driver));
         }
     }
 
     // Sync scheduler (T06) over the sources that make external calls. The
-    // fixture source is driven by the dev clock instead (T05).
+    // fixture source is driven by the dev clock instead (T05) and only
+    // answers searches here.
     let (scheduler, sync_handle) = sync::Scheduler::open(sync::SchedulerParts {
         reconciler: reconciler.clone(),
         clock: Arc::new(domain::SystemClock),
         config: config.sync.clone(),
-        sources: scheduled_sources(&config)?,
+        sources: sync_sources,
         seed: None,
     })
     .await

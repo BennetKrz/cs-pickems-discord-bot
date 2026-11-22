@@ -71,6 +71,13 @@ Once the app runs, the bot registers its slash commands in the server (in `DISCO
   - `match result | clear-override | void | unvoid | reopen` fixes matches by hand.
 
   Everyone sees the `/admin` commands, but only admins can run them; others get a private error.
+- Admins, under `/event`, choose which events are synced and can be picked:
+  - `search <name>` asks every data source that can search (at most one request per source, then cached for 24 h) and follows the event you choose in the menu. Its matches show up in the Activity within a minute;
+  - `follow <event>` follows an event the app already knows, for example one you unfollowed before;
+  - `unfollow <event>` stops the sync and hides its matches. Picks, points and history stay. When members have picks on it, the bot asks first;
+  - `list` shows the followed events with their match and pick counts.
+
+  Only matches of followed events show up in the lists and posts. Like `/admin`, only admins can run them.
 
 Set up the posts:
 

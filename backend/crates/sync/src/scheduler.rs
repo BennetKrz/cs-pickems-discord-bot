@@ -61,6 +61,10 @@ pub enum SyncError {
 pub struct SourceEntry {
     pub adapter: Arc<dyn SourceAdapter>,
     pub budget: Option<BudgetLimits>,
+    /// Only for [`SyncHandle::search`]: no job ever polls it. The dev
+    /// fixture source is one, because the dev clock drives its sync (T05,
+    /// T09).
+    pub search_only: bool,
 }
 
 /// Request counters and budget of one source.
@@ -77,6 +81,7 @@ pub(crate) struct Meter {
 pub(crate) struct Source {
     pub adapter: Arc<dyn SourceAdapter>,
     pub meter: Mutex<Meter>,
+    pub search_only: bool,
 }
 
 /// State shared by the scheduler loop and its handles.
@@ -353,6 +358,7 @@ impl Scheduler {
             sources.push(Source {
                 adapter: e.adapter,
                 meter: Mutex::new(meter),
+                search_only: e.search_only,
             });
         }
         let core = Arc::new(Core {
@@ -585,6 +591,9 @@ impl Scheduler {
                 Vec::new()
             };
             for (idx, &mark) in marks.iter().enumerate() {
+                if self.core.sources[idx].search_only {
+                    continue;
+                }
                 let source = self.core.source_id(idx);
                 if is_forced || (is_followed && event.status != EventStatus::Finished) {
                     let refs = store::refs::refs_of(pool, EntityType::Event, event_id.0).await?;
