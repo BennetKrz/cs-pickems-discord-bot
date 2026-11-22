@@ -7,7 +7,9 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use domain::{MapPick, MatchId, Pick, PickId, PickParts, ResultState, SeriesScore, TeamId};
+use domain::{
+    EventId, MapPick, MatchId, Pick, PickId, PickParts, ResultState, SeriesScore, TeamId,
+};
 use serde_json::{Value, json};
 use sqlx::sqlite::SqliteRow;
 use sqlx::types::Json;
@@ -670,4 +672,21 @@ pub async fn count_for_match(
         .bind(match_id.0)
         .fetch_one(ex)
         .await
+}
+
+/// Picks a guild made on the matches of one event (T09: unfollowing asks
+/// for confirmation when there are any).
+pub async fn count_in_event(
+    ex: impl SqliteExecutor<'_>,
+    guild_id: &str,
+    event_id: EventId,
+) -> DbResult<i64> {
+    sqlx::query_scalar(
+        "SELECT COUNT(*) FROM picks p JOIN matches m ON m.id = p.match_id \
+         WHERE p.guild_id = ? AND m.event_id = ?",
+    )
+    .bind(guild_id)
+    .bind(event_id.0)
+    .fetch_one(ex)
+    .await
 }

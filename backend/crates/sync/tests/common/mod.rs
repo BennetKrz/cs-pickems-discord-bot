@@ -288,7 +288,22 @@ impl Env {
             sources: vec![SourceEntry {
                 adapter: self.source.clone(),
                 budget,
+                search_only: false,
             }],
+            seed: Some(7),
+        })
+        .await
+        .unwrap()
+    }
+
+    /// A scheduler over the given sources (and not the sim source unless
+    /// listed), with a fixed jitter seed.
+    pub async fn scheduler_over(&self, sources: Vec<SourceEntry>) -> (Scheduler, SyncHandle) {
+        Scheduler::open(SchedulerParts {
+            reconciler: self.reconciler.clone(),
+            clock: self.clock.clone(),
+            config: SyncConfig::default(),
+            sources,
             seed: Some(7),
         })
         .await

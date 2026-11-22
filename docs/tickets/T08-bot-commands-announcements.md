@@ -69,7 +69,7 @@
   - Frontend `pendingView.test.tsx`: opens the match, asks once under StrictMode, and ignores failures.
 - **Checked in Discord by the owner on 22 Nov 2026 (AC 3)**, with a dev build and the fixture source:
   - `cargo run --features dev` with `ENABLED_SOURCES=fixture,manual` and a dev bot token;
-  - follow the fixture event (until T09: insert into `followed_events`);
+  - follow the fixture event (until T09: insert into `followed_events`; since T09: `/event search`);
   - `/admin channel set`;
   - the digest appears (advance the dev clock with `POST /api/dev/clock/advance` if needed);
   - click *Pick …*: the Activity opens on that match;

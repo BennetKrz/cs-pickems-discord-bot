@@ -1717,3 +1717,153 @@ async fn maps_and_my_picks_for_several_matches() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn followed_overview_known_event_search_and_picks_per_event() {
+    let db = test_db().await;
+    let s = seed(&db.pool).await;
+    let blast = event(&db.pool, "BLAST 50%_Cup").await;
+    event(&db.pool, "Other Cup").await;
+    let follow = |event_id, followed_at| FollowedEvent {
+        guild_id: GUILD.into(),
+        event_id,
+        followed_by: ALICE.into(),
+        followed_at,
+    };
+    guilds::follow_event(&db.pool, &follow(s.event, at(9, 0)))
+        .await
+        .unwrap();
+    guilds::follow_event(&db.pool, &follow(blast, at(9, 30)))
+        .await
+        .unwrap();
+    let winner = PickParts {
+        winner_team_id: Some(s.team_a),
+        series: None,
+        maps: Vec::new(),
+    };
+    picks::save(&db.pool, GUILD, ALICE, s.bo3, &winner, at(9, 0))
+        .await
+        .unwrap();
+    picks::save(&db.pool, GUILD, BOB, s.bo3, &winner, at(9, 0))
+        .await
+        .unwrap();
+    picks::save(
+        &db.pool,
+        "100000000000000002",
+        BOB,
+        s.bo3,
+        &winner,
+        at(9, 0),
+    )
+    .await
+    .unwrap();
+
+    // Picks per guild and event.
+    assert_eq!(
+        picks::count_in_event(&db.pool, GUILD, s.event)
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        picks::count_in_event(&db.pool, GUILD, blast).await.unwrap(),
+        0
+    );
+
+    // The overview: both followed events with their counts.
+    let o = guilds::followed_overview(&db.pool, GUILD).await.unwrap();
+    let rows: Vec<(&str, i64, i64, &str)> = o
+        .iter()
+        .map(|r| {
+            (
+                r.event.name.as_str(),
+                r.matches,
+                r.picks,
+                r.followed_by.as_str(),
+            )
+        })
+        .collect();
+    // Same start: by name.
+    assert_eq!(
+        rows,
+        [("BLAST 50%_Cup", 0, 0, ALICE), ("IEM Test", 1, 2, ALICE)]
+    );
+    assert_eq!(o[1].followed_at, at(9, 0));
+    assert!(
+        guilds::followed_overview(&db.pool, "100000000000000002")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // Known events by name, filtered by follow state.
+    let names = |v: Vec<Event>| v.into_iter().map(|e| e.name).collect::<Vec<_>>();
+    use events::FollowFilter::{Any, Followed, NotFollowed};
+    assert_eq!(
+        names(
+            events::search_known(&db.pool, GUILD, "cup", Any, 10)
+                .await
+                .unwrap()
+        ),
+        ["BLAST 50%_Cup", "Other Cup"]
+    );
+    assert_eq!(
+        names(
+            events::search_known(&db.pool, GUILD, "CUP", NotFollowed, 10)
+                .await
+                .unwrap()
+        ),
+        ["Other Cup"]
+    );
+    assert_eq!(
+        names(
+            events::search_known(&db.pool, GUILD, "", Followed, 10)
+                .await
+                .unwrap()
+        ),
+        ["BLAST 50%_Cup", "IEM Test"]
+    );
+    // `%` and `_` match only themselves.
+    assert_eq!(
+        names(
+            events::search_known(&db.pool, GUILD, "50%_", Any, 10)
+                .await
+                .unwrap()
+        ),
+        ["BLAST 50%_Cup"]
+    );
+    assert!(
+        events::search_known(&db.pool, GUILD, "0_C", Any, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        events::search_known(&db.pool, GUILD, "%", NotFollowed, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        events::search_known(&db.pool, GUILD, "x%y", Any, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        events::search_known(&db.pool, GUILD, "", Any, 1)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    // Another guild follows nothing.
+    assert_eq!(
+        names(
+            events::search_known(&db.pool, "100000000000000002", "", NotFollowed, 10)
+                .await
+                .unwrap()
+        ),
+        ["BLAST 50%_Cup", "IEM Test", "Other Cup"]
+    );
+}

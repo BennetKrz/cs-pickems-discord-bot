@@ -121,6 +121,8 @@ curl -X POST localhost:8080/api/dev/clock/advance \
 
 The anchor and the clock are stored in the database, so a restart resumes where you left off. To start over, delete the dev database.
 
+The fixture event is loaded but not followed, so the lists stay empty until an admin follows it. With a bot token, run `/event search` in Discord with a word from its name. The fixture source answers searches only, because the dev clock drives its sync. Without Discord, insert a row into `followed_events`.
+
 Dev builds also accept admin requests with an `X-Dev-User: <Discord user ID>` header, e.g. a manual score:
 
 ```sh
