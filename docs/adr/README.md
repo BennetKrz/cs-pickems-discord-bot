@@ -20,3 +20,4 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | [0009](0009-ci-cd-and-watchtower.md) | CI/CD pipeline, image tags and Watchtower | accepted |
 | [0010](0010-pick-rules-and-api.md) | Pick rules and pick API | accepted |
 | [0011](0011-scoring-and-settlement.md) | Scoring and settlement | accepted |
+| [0012](0012-matches-views.md) | Match list, match detail and the server clock | accepted |

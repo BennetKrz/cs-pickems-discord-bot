@@ -5,8 +5,8 @@
 //!   pick; a pick without parts deletes it (204).
 //! - `DELETE /api/matches/{id}/pick` deletes it (204, also if there was none).
 //! - `GET /api/matches/{id}/picks` lists every pick of the guild for the
-//!   match with display names, plus aggregates. Visible to every member at
-//!   all times, also before the lock.
+//!   match with display names and settled points (T12), plus aggregates.
+//!   Visible to every member at all times, also before the lock.
 //! - `GET /api/me/picks` lists the caller's picks.
 //!
 //! Writes run in one `BEGIN IMMEDIATE` transaction: load the match, check
@@ -15,6 +15,8 @@
 //! `invalid_pick` (422), `not_found` (404). See
 //! `docs/adr/0010-pick-rules-and-api.md`.
 
+use std::collections::HashMap;
+
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -22,9 +24,10 @@ use axum::routing::{get, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use domain::picks::{self as rules, PickError, PickStats, Unpickable};
-use domain::{MapPick, Match, MatchId, Pick, PickParts, SeriesScore, TeamId};
+use domain::{MapPick, Match, MatchId, Pick, PickId, PickParts, ResultState, SeriesScore, TeamId};
 use serde::{Deserialize, Serialize};
 use sqlx::SqliteConnection;
+use store::picks::PickResult;
 
 use crate::AppState;
 use crate::auth::Member;
@@ -155,6 +158,20 @@ pub struct PickView {
     /// Time of the last change.
     pub updated_at: DateTime<Utc>,
     pub edited: bool,
+    /// The settled points (T11), once settlement ran for the match.
+    pub result: Option<PickResultBody>,
+}
+
+/// The points of one pick, as settlement (T11) stored them.
+#[derive(Debug, Serialize)]
+pub struct PickResultBody {
+    pub points: i64,
+    pub state: ResultState,
+    /// Parts still waiting for a result or for data.
+    pub pending_parts: i64,
+    /// `domain::scoring::Breakdown` as stored: every part's outcome and
+    /// points.
+    pub breakdown: serde_json::Value,
 }
 
 /// `GET /api/matches/{id}/picks`.
@@ -305,6 +322,13 @@ async fn match_picks(
     let picks = store::picks::list_for_match_with_authors(&mut *tx, &member.guild_id, id)
         .await
         .map_err(db)?;
+    let mut results: HashMap<PickId, PickResult> =
+        store::picks::results_for_guild_match(&mut *tx, &member.guild_id, id)
+            .await
+            .map_err(db)?
+            .into_iter()
+            .map(|r| (r.pick_id, r))
+            .collect();
     tx.commit().await.map_err(db)?;
 
     let f = &m.fields;
@@ -329,6 +353,12 @@ async fn match_picks(
                 created_at: ap.pick.created_at,
                 updated_at: ap.pick.updated_at,
                 edited: edited(ap.revisions),
+                result: results.remove(&ap.pick.id).map(|r| PickResultBody {
+                    points: r.points,
+                    state: r.state,
+                    pending_parts: r.pending_parts,
+                    breakdown: r.breakdown,
+                }),
                 user_id: ap.pick.user_id,
             }
         })

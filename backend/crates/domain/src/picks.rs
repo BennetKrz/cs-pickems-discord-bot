@@ -272,6 +272,39 @@ pub fn check_pickable(
     Err(Unpickable::NotPickable(reason))
 }
 
+// ---- completeness (T12) --------------------------------------------------------
+
+/// How much of a pick is filled in, for the "my status" chip of the match
+/// list (T12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Completeness {
+    /// Some parts are set, but not every part [`completeness`] asks for.
+    Partial,
+    /// Every part is set; map scores stay optional.
+    Full,
+}
+
+/// Whether a (validated) pick is full: a winner, a series score (Bo3/Bo5),
+/// and a map winner for every map the series implies (2:1 → maps 1–3,
+/// 2:0 → maps 1–2; Bo1 → map 1). Map scores are optional. Decided for T12,
+/// see `docs/adr/0012-matches-views.md`.
+pub fn completeness(format: MatchFormat, parts: &PickParts) -> Completeness {
+    let maps_needed = match (format, parts.series) {
+        (MatchFormat::Bo1, _) => Some(1),
+        (_, Some(s)) => Some(s.a + s.b),
+        (_, None) => None,
+    };
+    let full = parts.winner_team_id.is_some()
+        && maps_needed
+            .is_some_and(|n| (1..=n).all(|i| parts.maps.iter().any(|m| m.map_number == i)));
+    if full {
+        Completeness::Full
+    } else {
+        Completeness::Partial
+    }
+}
+
 // ---- aggregates --------------------------------------------------------------
 
 /// How the picks that have some part split between team A and team B.
@@ -935,5 +968,89 @@ mod tests {
         assert_eq!(v["winner"]["pct_a"], 100);
         assert_eq!(v["maps"][0]["map_number"], 1);
         assert_eq!(v["maps"][0]["a"], 1);
+    }
+
+    #[test]
+    fn completeness_follows_the_series_pick() {
+        use Completeness::{Full, Partial};
+        let cases: Vec<(MatchFormat, PickParts, Completeness)> = vec![
+            // Bo1: winner plus map 1, score optional.
+            (Bo1, parts(Some(A), None, vec![]), Partial),
+            (Bo1, parts(None, None, vec![map(1, A)]), Partial),
+            (Bo1, parts(Some(A), None, vec![map(1, B)]), Full),
+            (Bo1, parts(Some(A), None, vec![map_ot(1, A)]), Full),
+            // Bo3: the series decides how many maps are needed.
+            (
+                Bo3,
+                parts(Some(A), None, vec![map(1, A), map(2, A)]),
+                Partial,
+            ),
+            (Bo3, parts(Some(A), Some(s(2, 0)), vec![]), Partial),
+            (Bo3, parts(Some(A), Some(s(2, 0)), vec![map(1, A)]), Partial),
+            (
+                Bo3,
+                parts(Some(A), Some(s(2, 0)), vec![map(1, A), map(2, A)]),
+                Full,
+            ),
+            (
+                Bo3,
+                parts(Some(A), Some(s(2, 0)), vec![map(1, A), map(3, A)]),
+                Partial,
+            ),
+            (
+                Bo3,
+                parts(Some(B), Some(s(1, 2)), vec![map(1, A), map(2, B)]),
+                Partial,
+            ),
+            (
+                Bo3,
+                parts(
+                    Some(B),
+                    Some(s(1, 2)),
+                    vec![map_score(1, A, 13, 4), map(2, B), map_ot(3, B)],
+                ),
+                Full,
+            ),
+            // Bo5: 3:2 needs all five maps.
+            (
+                Bo5,
+                parts(
+                    Some(A),
+                    Some(s(3, 2)),
+                    vec![map(1, A), map(2, B), map(3, A), map(4, B)],
+                ),
+                Partial,
+            ),
+            (
+                Bo5,
+                parts(
+                    Some(A),
+                    Some(s(3, 2)),
+                    vec![map(1, A), map(2, B), map(3, A), map(4, B), map(5, A)],
+                ),
+                Full,
+            ),
+            (
+                Bo5,
+                parts(
+                    Some(A),
+                    Some(s(3, 0)),
+                    vec![map(1, A), map(2, A), map(3, A)],
+                ),
+                Full,
+            ),
+        ];
+        for (format, p, want) in cases {
+            assert_eq!(completeness(format, &p), want, "{format} {p:?}");
+        }
+    }
+
+    #[test]
+    fn completeness_serializes_snake_case() {
+        assert_eq!(
+            serde_json::to_value(Completeness::Partial).unwrap(),
+            "partial"
+        );
+        assert_eq!(serde_json::to_value(Completeness::Full).unwrap(), "full");
     }
 }
