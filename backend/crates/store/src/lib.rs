@@ -13,6 +13,7 @@ pub mod audit;
 pub mod bot;
 pub mod events;
 pub mod guilds;
+pub mod leaderboard;
 pub mod matches;
 pub mod pending_views;
 pub mod picks;

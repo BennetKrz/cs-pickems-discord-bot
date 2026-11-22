@@ -19,23 +19,18 @@ const OPEN_LIMIT: i64 = 100;
 #[poise::command(slash_command, guild_only)]
 pub async fn leaderboard(ctx: Context<'_>) -> Result<(), Error> {
     let guild = guild_of(ctx)?;
-    let pool = &ctx.data().pool;
-    // T14 replaces this with the leaderboard query and its tie-break.
-    let totals: Vec<_> = store::scoring::totals_for_guild(pool, &guild)
-        .await?
-        .into_iter()
+    // The Activity's query (T14): same tie-break, same shared ranks.
+    let lb = store::leaderboard::load(&ctx.data().pool, &guild, None).await?;
+    let rows: Vec<render::LeaderLine> = lb
+        .board
+        .rows
+        .iter()
         .take(TOP)
-        .collect();
-    let ids: Vec<String> = totals.iter().map(|t| t.user_id.clone()).collect();
-    let names: HashMap<String, String> = store::bot::display_names(pool, &guild, &ids)
-        .await?
-        .into_iter()
-        .collect();
-    let rows: Vec<(String, i64)> = totals
-        .into_iter()
-        .map(|t| {
-            let name = names.get(&t.user_id).cloned().unwrap_or(t.user_id);
-            (name, t.points)
+        .map(|r| render::LeaderLine {
+            rank: r.rank,
+            name: lb.name_of(&r.standing.user_id).to_owned(),
+            points: r.standing.points,
+            provisional_points: r.standing.provisional_points,
         })
         .collect();
     ctx.send(discord::reply(&render::leaderboard(&rows), true))

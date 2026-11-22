@@ -312,27 +312,6 @@ fn cut_with_ties(mut all: Vec<TopPicker>, n: usize) -> Vec<TopPicker> {
     all
 }
 
-/// Display names of members of a guild, by user ID. Users without a
-/// stored profile are missing.
-pub async fn display_names(
-    ex: impl SqliteExecutor<'_>,
-    guild_id: &str,
-    user_ids: &[String],
-) -> DbResult<Vec<(String, String)>> {
-    sqlx::query_as(
-        "SELECT u.discord_user_id, \
-           coalesce(nullif(trim(gm.nick), ''), nullif(trim(u.global_name), ''), u.username) \
-         FROM users u \
-         LEFT JOIN guild_members gm ON gm.guild_id = ?1 AND gm.user_id = u.discord_user_id \
-         WHERE u.discord_user_id IN (SELECT value FROM json_each(?2)) \
-         ORDER BY u.discord_user_id",
-    )
-    .bind(guild_id)
-    .bind(sqlx::types::Json(user_ids))
-    .fetch_all(ex)
-    .await
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

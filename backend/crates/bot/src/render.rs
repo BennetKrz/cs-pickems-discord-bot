@@ -287,20 +287,33 @@ pub fn results(entries: &[ResultEntry]) -> Post {
     }
 }
 
-/// `/leaderboard`: the top members by points (equal points share a rank).
-pub fn leaderboard(rows: &[(String, i64)]) -> Post {
+/// One line of `/leaderboard`, ranked by `store::leaderboard::load` (T14).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeaderLine {
+    pub rank: u32,
+    pub name: String,
+    pub points: i64,
+    /// The part of `points` from live matches.
+    pub provisional_points: i64,
+}
+
+/// `/leaderboard`: the top members with their ranks (shared ranks repeat)
+/// and points; points from live matches are marked.
+pub fn leaderboard(rows: &[LeaderLine]) -> Post {
     let description = if rows.is_empty() {
         "No settled picks yet.".to_owned()
     } else {
-        let mut lines = Vec::new();
-        let mut rank = 0;
-        for (n, (name, pts)) in rows.iter().enumerate() {
-            if n == 0 || rows[n - 1].1 != *pts {
-                rank = n + 1;
-            }
-            lines.push(format!("**{rank}.** {name} · {}", points(*pts)));
-        }
-        lines.join("\n")
+        rows.iter()
+            .map(|r| {
+                let live = if r.provisional_points == 0 {
+                    String::new()
+                } else {
+                    format!(" (+{} live)", r.provisional_points)
+                };
+                format!("**{}.** {} · {}{live}", r.rank, r.name, points(r.points))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     };
     Post {
         title: "Leaderboard".to_owned(),
@@ -535,18 +548,28 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn leaderboard_shares_ranks_on_equal_points() {
+    fn leaderboard_shows_the_given_ranks_and_marks_live_points() {
+        let line = |rank, name: &str, points, provisional_points| LeaderLine {
+            rank,
+            name: name.to_owned(),
+            points,
+            provisional_points,
+        };
+        // Ranks come from the tie-break, not from equal points.
         let rows = vec![
-            ("Alice".to_owned(), 10),
-            ("Bob".to_owned(), 7),
-            ("Carol".to_owned(), 7),
-            ("Dan".to_owned(), 1),
+            line(1, "Alice", 10, 0),
+            line(2, "Bob", 7, 3),
+            line(3, "Carol", 7, 0),
+            line(3, "Dan", 7, 0),
+            line(5, "Eve", 1, 0),
         ];
         let p = leaderboard(&rows);
         assert_eq!(
             p.description,
-            "**1.** Alice · 10 pts\n**2.** Bob · 7 pts\n**2.** Carol · 7 pts\n**4.** Dan · 1 pt"
+            "**1.** Alice · 10 pts\n**2.** Bob · 7 pts (+3 live)\n**3.** Carol · 7 pts\n\
+             **3.** Dan · 7 pts\n**5.** Eve · 1 pt"
         );
+        assert!(!all_text(&p).contains("bet"));
         assert_eq!(p.buttons, vec![launch_button()]);
         assert_eq!(leaderboard(&[]).description, "No settled picks yet.");
     }

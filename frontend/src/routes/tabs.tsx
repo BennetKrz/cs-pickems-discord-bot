@@ -3,21 +3,13 @@ import { Avatar } from '../shell/Avatar.tsx'
 import type { ShellContext } from '../shell/Shell.tsx'
 import { EmptyState } from '../shell/states.tsx'
 
-// Placeholders for the tab views. T13 (Events), T14 (Leaderboard) and T15
-// (Me) replace them; Matches is in ../matches/ (T12).
+// Placeholders for the tab views. T13 (Events) and T15 (Me) replace them;
+// Matches is in ../matches/ (T12), Leaderboard in ../leaderboard/ (T14).
 
 export function Events() {
   return (
     <EmptyState title="No events yet">
       Admins choose which tournaments are open for picks.
-    </EmptyState>
-  )
-}
-
-export function Leaderboard() {
-  return (
-    <EmptyState title="No points yet">
-      The leaderboard fills up once the first picked matches have finished.
     </EmptyState>
   )
 }
