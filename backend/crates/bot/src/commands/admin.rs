@@ -17,7 +17,7 @@ use crate::schedule;
     slash_command,
     guild_only,
     check = "admin_check",
-    subcommands("channel", "role", "digest", "status", "link", "match_"),
+    subcommands("channel", "role", "digest", "status", "backup", "link", "match_"),
     subcommand_required
 )]
 pub async fn admin(_ctx: Context<'_>) -> Result<(), Error> {
@@ -149,14 +149,18 @@ async fn digest_set(
 
 // ---- sync status (T06) ----------------------------------------------------------
 
-/// Sync health and API quota per data source.
+/// Sync health, API quota per data source, and backups.
 #[poise::command(slash_command)]
 async fn status(ctx: Context<'_>) -> Result<(), Error> {
-    let Some(sync) = &ctx.data().sync else {
-        return say(ctx, "The sync worker is not running.").await;
+    let sync = match &ctx.data().sync {
+        Some(sync) => Some(sync.status().await?),
+        None => None,
     };
-    let s = sync.status().await?;
-    say(ctx, status_text(&s)).await
+    let backup = match &ctx.data().backup {
+        Some(b) => Some(b.status().await),
+        None => None,
+    };
+    say(ctx, status_text(sync.as_ref(), backup.as_ref())).await
 }
 
 fn ago(t: Option<DateTime<Utc>>) -> String {
@@ -164,7 +168,110 @@ fn ago(t: Option<DateTime<Utc>>) -> String {
 }
 
 /// The text of `/admin status`.
-pub fn status_text(s: &sync::SyncStatus) -> String {
+pub fn status_text(
+    sync: Option<&sync::SyncStatus>,
+    backup: Option<&backup::BackupStatus>,
+) -> String {
+    let mut out = match sync {
+        Some(s) => sync_lines(s),
+        None => vec!["The sync worker is not running.".to_owned()],
+    };
+    out.push(String::new());
+    out.extend(backup_lines(backup));
+    truncate(&out.join("\n"), 1900)
+}
+
+/// Human-readable file size, e.g. `12.3 MB`.
+pub fn size_text(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+    let mut v = bytes as f64;
+    let mut unit = 0;
+    while v >= 1000.0 && unit < UNITS.len() - 1 {
+        v /= 1000.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{v:.1} {}", UNITS[unit])
+    }
+}
+
+fn backup_lines(b: Option<&backup::BackupStatus>) -> Vec<String> {
+    let mut out = vec!["**Backups**".to_owned()];
+    let Some(b) = b else {
+        out.push("Backups are not running.".to_owned());
+        return out;
+    };
+    match &b.last {
+        Some(last) => out.push(format!(
+            "Last backup {} · {} · `{}`",
+            ts(last.created_at, 'R'),
+            size_text(last.size),
+            last.file_name
+        )),
+        None => out.push("No backup yet.".to_owned()),
+    }
+    if let Some(e) = &b.last_error {
+        out.push(format!(
+            "⚠️ failed {}: {}",
+            ts(e.at, 'R'),
+            truncate(&e.message, 200)
+        ));
+    }
+    if b.running {
+        out.push("A backup is running now.".to_owned());
+    }
+    out.push(match b.next_run {
+        Some(n) => format!("Next daily backup {}", ts(n, 'R')),
+        None => "Daily backups are off.".to_owned(),
+    });
+    out
+}
+
+// ---- backups (P4) ---------------------------------------------------------------
+
+/// Database backups.
+#[poise::command(slash_command, subcommands("backup_now"), subcommand_required)]
+async fn backup(_ctx: Context<'_>) -> Result<(), Error> {
+    Ok(())
+}
+
+/// Back up the database now.
+#[poise::command(slash_command, rename = "now")]
+async fn backup_now(ctx: Context<'_>) -> Result<(), Error> {
+    let Some(service) = ctx.data().backup.clone() else {
+        return say(ctx, "Backups are not running.").await;
+    };
+    // A backup of a large database takes longer than Discord's 3 s.
+    ctx.defer_ephemeral().await?;
+    match service.run(backup::BackupKind::Manual).await {
+        Ok(o) => {
+            let mut text = format!(
+                "Backup written: `{}` ({}, {:.1} s).",
+                o.backup.file_name,
+                size_text(o.backup.size),
+                o.duration.as_secs_f64()
+            );
+            if let Some(e) = &o.extra_error {
+                text.push_str(&format!("\n⚠️ {}", truncate(e, 300)));
+            }
+            say(ctx, text).await
+        }
+        Err(backup::BackupError::AlreadyRunning) => {
+            say(ctx, "A backup is already running. Try again in a moment.").await
+        }
+        Err(e) => {
+            say(
+                ctx,
+                format!("⚠️ The backup failed: {}", truncate(&e.to_string(), 300)),
+            )
+            .await
+        }
+    }
+}
+
+fn sync_lines(s: &sync::SyncStatus) -> Vec<String> {
     let mut out = vec!["**Sources**".to_owned()];
     if s.sources.is_empty() {
         out.push("No source makes external calls.".to_owned());
@@ -197,7 +304,8 @@ pub fn status_text(s: &sync::SyncStatus) -> String {
             .unwrap_or_default();
         out.push(format!("`{}` ({}) · {health}{next}", j.job, j.source));
     }
-    truncate(&out.join("\n"), 1900)
+    // Leave room for the backup section within Discord's 2000 characters.
+    vec![truncate(&out.join("\n"), 1500)]
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -738,10 +846,69 @@ mod tests {
                 },
             ],
         };
-        let text = status_text(&s);
+        let text = status_text(Some(&s), None);
         assert!(text.contains("`pandascore` · 120 requests this hour · budget 380/500 left · source quota 880 left"), "{text}");
         assert!(text.contains("`live` (pandascore) · ⚠️ failed"), "{text}");
         assert!(text.contains(": timeout"), "{text}");
         assert!(text.contains("`structure` (pandascore) · ok <t:"), "{text}");
+        assert!(
+            text.contains("**Backups**\nBackups are not running."),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn status_text_shows_the_last_backup_and_problems() {
+        use chrono::TimeZone;
+        let now = Utc.with_ymd_and_hms(2026, 11, 22, 3, 0, 0).unwrap();
+        let mut b = backup::BackupStatus {
+            last: Some(backup::BackupInfo {
+                path: "/data/backups/pickem-20261122T030000Z-daily.db.zst".into(),
+                file_name: "pickem-20261122T030000Z-daily.db.zst".into(),
+                kind: backup::BackupKind::Daily,
+                created_at: now,
+                size: 12_345_678,
+            }),
+            last_error: None,
+            next_run: Some(now + Duration::days(1)),
+            running: false,
+        };
+        let text = status_text(None, Some(&b));
+        assert!(
+            text.starts_with("The sync worker is not running."),
+            "{text}"
+        );
+        assert!(
+            text.contains(&format!(
+                "Last backup <t:{}:R> · 12.3 MB · `pickem-20261122T030000Z-daily.db.zst`",
+                now.timestamp()
+            )),
+            "{text}"
+        );
+        assert!(text.contains("Next daily backup <t:"), "{text}");
+        assert!(!text.contains("⚠️"), "{text}");
+
+        b.last = None;
+        b.next_run = None;
+        b.running = true;
+        b.last_error = Some(backup::FailedRun {
+            at: now,
+            message: "creating /data/backups: Permission denied".into(),
+        });
+        let text = status_text(None, Some(&b));
+        assert!(text.contains("No backup yet."), "{text}");
+        assert!(text.contains("⚠️ failed <t:"), "{text}");
+        assert!(text.contains("Permission denied"), "{text}");
+        assert!(text.contains("A backup is running now."), "{text}");
+        assert!(text.contains("Daily backups are off."), "{text}");
+    }
+
+    #[test]
+    fn sizes_read_naturally() {
+        assert_eq!(size_text(0), "0 B");
+        assert_eq!(size_text(999), "999 B");
+        assert_eq!(size_text(1_500), "1.5 KB");
+        assert_eq!(size_text(28_834_071), "28.8 MB");
+        assert_eq!(size_text(3_000_000_000), "3.0 GB");
     }
 }

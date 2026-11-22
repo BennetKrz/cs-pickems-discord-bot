@@ -122,6 +122,8 @@ pub struct Config {
     pub precedence: sync::Precedence,
     /// Cadences of the sync scheduler, from `[sync]` and `SYNC__*` (T06).
     pub sync: sync::SyncConfig,
+    /// Backups (P4), from `BACKUP_*` and `TZ`.
+    pub backup: backup::BackupConfig,
 }
 
 /// Everything wrong with the configuration, reported at once.
@@ -185,6 +187,12 @@ struct FileConfig {
     static_dir: Option<String>,
     image_cache_dir: Option<String>,
     primary_source: Option<String>,
+    backup_dir: Option<String>,
+    backup_extra_dir: Option<String>,
+    backup_time: Option<String>,
+    backup_keep_daily: Option<StringOrInt>,
+    backup_keep_weekly: Option<StringOrInt>,
+    backup_keep_special: Option<StringOrInt>,
     #[serde(default)]
     budget: BTreeMap<String, FileBudget>,
     /// Field group → sources, highest precedence first.
@@ -384,6 +392,19 @@ pub fn from_sources(
     );
     let precedence = precedence(file.precedence, &enabled_sources, &mut err);
     let sync = sync_config(env, file.sync, &mut err);
+    let backup = backup_config(
+        env,
+        BackupFile {
+            dir: file.backup_dir,
+            extra_dir: file.backup_extra_dir,
+            time: file.backup_time,
+            keep_daily: file.backup_keep_daily.map(StringOrInt::into_string),
+            keep_weekly: file.backup_keep_weekly.map(StringOrInt::into_string),
+            keep_special: file.backup_keep_special.map(StringOrInt::into_string),
+        },
+        database_url.as_deref(),
+        &mut err,
+    );
 
     if !err.is_empty() {
         return Err(err);
@@ -415,6 +436,7 @@ pub fn from_sources(
         primary_source,
         precedence,
         sync,
+        backup,
     })
 }
 
@@ -715,6 +737,126 @@ fn sync_config(
     }
     for problem in c.validate() {
         err.invalid.push(format!("sync settings: {problem}"));
+    }
+    c
+}
+
+/// Backup settings from the config file (keys `backup_*`).
+struct BackupFile {
+    dir: Option<String>,
+    extra_dir: Option<String>,
+    time: Option<String>,
+    keep_daily: Option<String>,
+    keep_weekly: Option<String>,
+    keep_special: Option<String>,
+}
+
+/// The backup directory when `BACKUP_DIR` is unset: `backups/` next to the
+/// database file (`/data/backups` in the image).
+fn default_backup_dir(database_url: Option<&str>) -> PathBuf {
+    database_url
+        .and_then(|url| store::db_path(url).ok().flatten())
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+        .unwrap_or_default()
+        .join("backups")
+}
+
+/// Reads `TZ` as glibc does, as far as an IANA zone is concerned: a bare
+/// name (`Europe/Berlin`), optionally with a leading `:`, or a path into a
+/// zoneinfo directory (`:/usr/share/zoneinfo/Europe/Berlin`). A path such as
+/// `/etc/localtime` is followed when it is a symlink into zoneinfo, as on
+/// most hosts. POSIX rules like `CET-1CEST` are not supported.
+fn parse_tz_env(raw: &str) -> Option<chrono_tz::Tz> {
+    let s = raw.trim().trim_start_matches(':');
+    if let Ok(tz) = s.parse() {
+        return Some(tz);
+    }
+    if !s.starts_with('/') {
+        return None;
+    }
+    let path = std::fs::read_link(s)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| s.to_owned());
+    path.split_once("zoneinfo/")?.1.parse().ok()
+}
+
+/// Backups (P4): `BACKUP_DIR`, `BACKUP_EXTRA_DIR`, `BACKUP_TIME` (`HH:MM`
+/// or `off`), `BACKUP_KEEP_DAILY`/`_WEEKLY`/`_SPECIAL`, and the zone of
+/// `BACKUP_TIME` from `TZ` (an IANA name; UTC when unset).
+fn backup_config(
+    env: &HashMap<String, String>,
+    file: BackupFile,
+    database_url: Option<&str>,
+    err: &mut ConfigError,
+) -> backup::BackupConfig {
+    let get = |key: &str, file_value: Option<String>| {
+        env.get(key)
+            .map(|v| v.trim().to_owned())
+            .filter(|v| !v.is_empty())
+            .or_else(|| {
+                file_value
+                    .map(|v| v.trim().to_owned())
+                    .filter(|v| !v.is_empty())
+            })
+    };
+    let mut c = backup::BackupConfig::new(
+        get("BACKUP_DIR", file.dir)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| default_backup_dir(database_url)),
+    );
+    c.extra_dir = get("BACKUP_EXTRA_DIR", file.extra_dir).map(PathBuf::from);
+
+    if let Some(raw) = get("BACKUP_TIME", file.time) {
+        if raw.eq_ignore_ascii_case("off") {
+            c.time = None;
+        } else {
+            match backup::schedule::parse_hhmm(&raw) {
+                Some(t) => c.time = Some(t),
+                None => err.invalid.push(format!(
+                    "BACKUP_TIME: expected HH:MM such as 04:00, or `off`, got `{raw}`"
+                )),
+            }
+        }
+    }
+
+    if let Some(raw) = get("TZ", None) {
+        match parse_tz_env(&raw) {
+            Some(tz) => c.tz = tz,
+            None => err.invalid.push(format!(
+                "TZ: expected an IANA time zone name such as Europe/Berlin, got `{raw}`"
+            )),
+        }
+    }
+
+    for (key, file_value, slot) in [
+        (
+            "BACKUP_KEEP_DAILY",
+            file.keep_daily,
+            &mut c.policy.keep_daily,
+        ),
+        (
+            "BACKUP_KEEP_WEEKLY",
+            file.keep_weekly,
+            &mut c.policy.keep_weekly,
+        ),
+        (
+            "BACKUP_KEEP_SPECIAL",
+            file.keep_special,
+            &mut c.policy.keep_special,
+        ),
+    ] {
+        if let Some(raw) = get(key, file_value) {
+            match raw.parse::<usize>() {
+                // Keeping no daily backup would delete each new one at once.
+                Ok(0) if key == "BACKUP_KEEP_DAILY" => {
+                    err.invalid.push(format!("{key}: must be at least 1"));
+                }
+                Ok(n) => *slot = n,
+                Err(_) => err
+                    .invalid
+                    .push(format!("{key}: expected a whole number, got `{raw}`")),
+            }
+        }
     }
     c
 }
@@ -1081,6 +1223,107 @@ mod tests {
             text.contains("lock_every must be greater than zero"),
             "{text}"
         );
+    }
+
+    #[test]
+    fn backup_defaults_sit_next_to_the_database() {
+        let c = from_sources(&full_env(), None).unwrap();
+        assert_eq!(c.backup, backup::BackupConfig::new("data/backups"));
+        assert_eq!(c.backup.time, chrono::NaiveTime::from_hms_opt(4, 0, 0));
+        assert_eq!(c.backup.tz, chrono_tz::Tz::UTC);
+        assert_eq!(c.backup.policy, backup::Policy::default());
+
+        let mut e = full_env();
+        e.insert("DATABASE_URL".into(), "sqlite:///data/pickem.db".into());
+        let c = from_sources(&e, None).unwrap();
+        assert_eq!(c.backup.dir, PathBuf::from("/data/backups"));
+    }
+
+    #[test]
+    fn backup_settings_from_env_and_file() {
+        let mut e = full_env();
+        e.extend(env(&[
+            ("BACKUP_TIME", "03:30"),
+            ("TZ", "Europe/Berlin"),
+            ("BACKUP_EXTRA_DIR", "/mnt/nas"),
+            ("BACKUP_KEEP_WEEKLY", "4"),
+        ]));
+        let file = "backup_dir = \"/srv/bk\"\nbackup_time = \"05:00\"\nbackup_keep_daily = 7\n";
+        let c = from_sources(&e, with_file(file)).unwrap();
+        assert_eq!(c.backup.dir, PathBuf::from("/srv/bk"));
+        assert_eq!(c.backup.extra_dir, Some(PathBuf::from("/mnt/nas")));
+        // The environment wins over the file.
+        assert_eq!(c.backup.time, chrono::NaiveTime::from_hms_opt(3, 30, 0));
+        assert_eq!(c.backup.tz, chrono_tz::Europe::Berlin);
+        assert_eq!(c.backup.policy.keep_daily, 7);
+        assert_eq!(c.backup.policy.keep_weekly, 4);
+        assert_eq!(c.backup.policy.keep_special, 5);
+
+        let mut e = full_env();
+        e.insert("BACKUP_TIME".into(), "OFF".into());
+        e.insert("TZ".into(), ":UTC".into());
+        let c = from_sources(&e, None).unwrap();
+        assert_eq!(c.backup.time, None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tz_accepts_the_forms_glibc_users_set() {
+        use chrono_tz::{Europe::Berlin, Tz};
+        assert_eq!(parse_tz_env("Europe/Berlin"), Some(Berlin));
+        assert_eq!(parse_tz_env(":Europe/Berlin"), Some(Berlin));
+        assert_eq!(parse_tz_env("UTC"), Some(Tz::UTC));
+        assert_eq!(
+            parse_tz_env(":/usr/share/zoneinfo/Europe/Berlin"),
+            Some(Berlin)
+        );
+        // A symlink into zoneinfo, like /etc/localtime on most hosts.
+        let dir = tempfile::tempdir().unwrap();
+        let link = dir.path().join("localtime");
+        std::os::unix::fs::symlink("/usr/share/zoneinfo/Europe/Berlin", &link).unwrap();
+        assert_eq!(parse_tz_env(&format!(":{}", link.display())), Some(Berlin));
+        for bad in ["CET-1CEST", "Europe/Atlantis", "/nonexistent/localtime", ""] {
+            assert_eq!(parse_tz_env(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn bad_backup_settings_are_reported_together() {
+        let mut e = full_env();
+        e.extend(env(&[
+            ("BACKUP_TIME", "4am"),
+            ("TZ", "CET-1CEST"),
+            ("BACKUP_KEEP_DAILY", "0"),
+            ("BACKUP_KEEP_SPECIAL", "-1"),
+        ]));
+        let text = from_sources(&e, None).unwrap_err().to_string();
+        assert!(text.contains("BACKUP_TIME: expected HH:MM"), "{text}");
+        assert!(text.contains("TZ: expected an IANA time zone"), "{text}");
+        assert!(
+            text.contains("BACKUP_KEEP_DAILY: must be at least 1"),
+            "{text}"
+        );
+        assert!(
+            text.contains("BACKUP_KEEP_SPECIAL: expected a whole number"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn example_backup_keys_are_accepted() {
+        // The commented backup keys in config.example.toml, uncommented.
+        let text = include_str!("../../../../config.example.toml");
+        let keys: String = text
+            .lines()
+            .filter(|l| l.starts_with("# backup_"))
+            .map(|l| l.trim_start_matches("# "))
+            .map(|l| l.split("  #").next().unwrap_or(l))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(keys.lines().count(), 6, "{keys}");
+        let c = from_sources(&full_env(), with_file(&keys)).unwrap();
+        assert_eq!(c.backup.policy, backup::Policy::default());
+        assert_eq!(c.backup.time, chrono::NaiveTime::from_hms_opt(4, 0, 0));
     }
 
     #[test]

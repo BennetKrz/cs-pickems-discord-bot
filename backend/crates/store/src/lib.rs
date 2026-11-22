@@ -63,7 +63,59 @@ pub enum StoreError {
 /// Applies all pending migrations. Already applied ones are skipped, so this
 /// is safe on every start. Fails if an applied migration was edited.
 pub async fn migrate(pool: &SqlitePool) -> Result<(), StoreError> {
-    MIGRATOR.run(pool).await.map_err(StoreError::Migrate)
+    migrate_with(pool, &MIGRATOR).await
+}
+
+/// Applies the pending migrations of `migrator`. The app uses [`migrator`];
+/// tests pass one with extra (dummy) migrations.
+pub async fn migrate_with(pool: &SqlitePool, migrator: &Migrator) -> Result<(), StoreError> {
+    migrator.run(pool).await.map_err(StoreError::Migrate)
+}
+
+/// The embedded migrations of the app.
+pub fn migrator() -> &'static Migrator {
+    &MIGRATOR
+}
+
+/// Whether `migrator` would change the database, and from which schema
+/// version: `Some(current)` when migrations are pending on a database that
+/// already holds data (`current` is the newest applied version, 0 if none).
+/// `None` when nothing is pending, or when the database is still empty, so
+/// there is nothing to lose (P4 backs up before migrating on `Some`).
+pub async fn pending_migrations(pool: &SqlitePool, migrator: &Migrator) -> DbResult<Option<i64>> {
+    let tables: Vec<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+    )
+    .fetch_all(pool)
+    .await?;
+    if tables.is_empty() {
+        return Ok(None);
+    }
+    let applied: Vec<i64> = if tables.iter().any(|t| t == "_sqlx_migrations") {
+        sqlx::query_scalar("SELECT version FROM _sqlx_migrations WHERE success = 1")
+            .fetch_all(pool)
+            .await?
+    } else {
+        Vec::new()
+    };
+    let pending = migrator
+        .iter()
+        .filter(|m| !m.migration_type.is_down_migration())
+        .any(|m| !applied.contains(&m.version));
+    Ok(pending.then(|| applied.iter().copied().max().unwrap_or(0)))
+}
+
+/// The database file behind a `sqlite:` URL; `None` for an in-memory one.
+pub fn db_path(database_url: &str) -> Result<Option<std::path::PathBuf>, StoreError> {
+    if !database_url.starts_with("sqlite:") {
+        return Err(StoreError::InvalidUrl(
+            "expected a sqlite: URL such as sqlite://data/pickem.db".to_owned(),
+        ));
+    }
+    let options = SqliteConnectOptions::from_str(database_url)
+        .map_err(|e| StoreError::InvalidUrl(e.to_string()))?;
+    let path = options.get_filename();
+    Ok((!is_in_memory(path)).then(|| path.to_path_buf()))
 }
 
 /// Opens the pool and applies pending migrations: what the app does at start.

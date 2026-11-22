@@ -27,8 +27,11 @@ services:
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     env_file: .env
     volumes:
-      # SQLite database (pickem.db) and the image cache.
+      # SQLite database (pickem.db), backups (backups/) and the image cache.
       - ./data:/data
+      # Optional second backup target (P4), e.g. a NAS share mounted on the
+      # host. Set BACKUP_EXTRA_DIR=/backup-extra in .env as well.
+      # - /mnt/nas/pickem:/backup-extra
     restart: unless-stopped
     # The app shuts down within 8 s; leave room.
     stop_grace_period: 20s

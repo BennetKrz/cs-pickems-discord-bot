@@ -54,6 +54,7 @@ flowchart LR
 | Sync | `sync` | Scheduler with API budget, reconciler, lock ticker, domain events, following events. | T03, T06, T09 |
 | HTTP API | `api` | Auth (Discord OAuth via Embedded App SDK), JSON API, image proxy, static frontend. | T07, T10, T12–T15 |
 | Bot | `bot` | Slash commands, channel posts, Activity launch. | T08, T09 |
+| Backup | `backup` | Daily, manual and pre-migration backups of the SQLite file (`VACUUM INTO`, integrity check, zstd), retention, second target, restore. | P4 |
 | App | `app` | Binary: config, wiring, graceful shutdown, CLI subcommands. | T01 |
 | Frontend | `frontend/` | React Activity: Matches, Events, Leaderboard, Me (+ Admin in P5). | T07, T12–T15 |
 
@@ -88,6 +89,7 @@ The canonical schema is specified in [T02](tickets/T02-domain-model-database.md)
     - `caddy` (compose profile `caddy`, the default), publishing 80/443 with automatic Let's Encrypt certificates; or
     - an **existing Traefik** outside this stack: `docker-compose.traefik.yml` attaches `app` to Traefik's network, and the route comes from `docker-compose.traefik-labels.yml` (Docker labels) or `traefik/pickem.yml` (Traefik's file provider);
   - `watchtower`, updating only the `app` container: label-enable mode plus the scope `cs2-pickem`, so the proxy and other stacks are never touched (T17, [ADR 0009](adr/0009-ci-cd-and-watchtower.md)).
+- Backups (P4, [ADR 0015](adr/0015-backups.md)): the app writes them itself into `./data/backups`, daily and before every migration, plus an optional second directory (e.g. a NAS share). Restore with `app restore <file>` while `app` is stopped.
 - The Discord Activity URL mapping `/` points to the owner's domain. Discord's proxy forwards Activity requests to the reverse proxy, which forwards them to `app:8080`.
 - Images are built in GitHub Actions for arm64 and amd64 (cross-compiled on one amd64 runner, not under QEMU) after the gates pass, and pushed to GHCR as `latest`, `sha-<short>`, and `vX.Y.Z` plus `stable` on releases. Watchtower polls the tag set in `IMAGE_TAG` every 5 min.
 

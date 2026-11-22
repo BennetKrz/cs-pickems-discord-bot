@@ -101,6 +101,49 @@ pub fn image_proxy(config: &Config) -> anyhow::Result<api::img::ImageProxy> {
     ))
 }
 
+/// Opens the database for every command that uses it. Pending migrations
+/// run only after a pre-migration backup (P4); if that backup fails, this
+/// fails and the database stays as it was.
+pub async fn open_db(config: &Config) -> anyhow::Result<store::SqlitePool> {
+    backup::open_db(&config.database_url, &config.backup, store::migrator())
+        .await
+        .context("opening the database")
+}
+
+/// `app restore <file>`: replaces the database with a backup (P4). The app
+/// must be stopped. A bare file name is looked up in `BACKUP_DIR`.
+pub async fn restore(config: Config, file: &std::path::Path) -> anyhow::Result<()> {
+    let db_path = store::db_path(&config.database_url)?
+        .context("DATABASE_URL points to an in-memory database; there is nothing to restore")?;
+    let source = if file.exists() || file.components().count() > 1 {
+        file.to_path_buf()
+    } else {
+        config.backup.dir.join(file)
+    };
+    let report = backup::restore(&source, &db_path, &config.backup)
+        .await
+        .context("restoring")?;
+    if let Some(b) = &report.safety_backup {
+        println!(
+            "The replaced database was backed up to {}",
+            b.path.display()
+        );
+    }
+    if let Some(p) = &report.moved_aside {
+        println!(
+            "The replaced database could not be backed up and was moved to {}",
+            p.display()
+        );
+    }
+    println!(
+        "Restored {} from {}. Start the app again (`docker compose start app`); \
+         it migrates the restored database if needed.",
+        report.db_path.display(),
+        report.restored_from.display()
+    );
+    Ok(())
+}
+
 fn budget_of(config: &Config, id: SourceId) -> Option<sync::BudgetLimits> {
     config.budgets.get(&id).map(|b| sync::BudgetLimits {
         per_hour: b.per_hour,
@@ -113,9 +156,7 @@ fn budget_of(config: &Config, id: SourceId) -> Option<sync::BudgetLimits> {
 /// consumer runs in this process; settlement is a recompute (T11), so a
 /// later run catches up.
 pub async fn replay(config: Config) -> anyhow::Result<sync::Report> {
-    let pool = store::open(&config.database_url)
-        .await
-        .context("opening the database")?;
+    let pool = open_db(&config).await?;
     let report = reconciler(&config, pool.clone(), sync::EventBus::new())
         .replay(chrono::Utc::now())
         .await
@@ -144,9 +185,7 @@ pub async fn replay(config: Config) -> anyhow::Result<sync::Report> {
 /// keeps the rules that were active when it locked; this applies a rules
 /// change to history on purpose.
 pub async fn rescore(config: Config) -> anyhow::Result<sync::SettleReport> {
-    let pool = store::open(&config.database_url)
-        .await
-        .context("opening the database")?;
+    let pool = open_db(&config).await?;
     let report = sync::settle::rescore_all(&pool, chrono::Utc::now())
         .await
         .context("rescoring")?;
@@ -171,9 +210,7 @@ fn check_guild_id(guild_id: &str) -> anyhow::Result<()> {
 /// defaults filled in) and its version history, as JSON.
 pub async fn rules_show(config: Config, guild_id: &str) -> anyhow::Result<serde_json::Value> {
     check_guild_id(guild_id)?;
-    let pool = store::open(&config.database_url)
-        .await
-        .context("opening the database")?;
+    let pool = open_db(&config).await?;
     let current = store::scoring::current_rules(&pool, guild_id).await?;
     let history = store::scoring::history(&pool, guild_id).await?;
     pool.close().await;
@@ -210,9 +247,7 @@ pub async fn rules_set(
     let rules: domain::scoring::ScoringRules = serde_json::from_str(&text)
         .with_context(|| format!("{} is not a valid rules file", file.display()))?;
     rules.validate()?;
-    let pool = store::open(&config.database_url)
-        .await
-        .context("opening the database")?;
+    let pool = open_db(&config).await?;
     let version = store::scoring::set_rules(
         &pool,
         guild_id,
@@ -250,9 +285,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         );
     }
 
-    let pool = store::open(&config.database_url)
-        .await
-        .context("opening the database")?;
+    let pool = open_db(&config).await?;
+    // Daily and manual backups (P4).
+    let backups = backup::BackupService::new(pool.clone(), config.backup.clone());
 
     // Domain events from the reconciler; T08, T10 and T11 subscribe here.
     let bus = sync::EventBus::new();
@@ -335,6 +370,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         manual: sync::ManualService::new(reconciler.clone()),
         reconciler: reconciler.clone(),
         sync: Some(sync_handle.clone()),
+        backup: Some(backups.clone()),
         guild_id: config.discord.guild_id.clone(),
     };
     state = state.with_sync(sync_handle);
@@ -359,10 +395,12 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     tracing::info!(addr = %listener.local_addr()?, "HTTP listening");
 
     // One token per component, so shutdown can stop them in a fixed order.
+    let backup_stop = CancellationToken::new();
     let sync_stop = CancellationToken::new();
     let bot_stop = CancellationToken::new();
     let http_stop = CancellationToken::new();
 
+    let backup_task = tokio::spawn(backups.run_schedule(backup_stop.clone()));
     let sync_task = {
         let stop = sync_stop.clone();
         let pool = pool.clone();
@@ -400,6 +438,12 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     };
 
     let sequence = async {
+        // A backup in progress is abandoned; its temp files are removed on
+        // the next start.
+        backup_stop.cancel();
+        if let Err(e) = backup_task.await {
+            tracing::warn!("backup task ended abnormally: {e}");
+        }
         sync_stop.cancel();
         if let Err(e) = sync_task.await {
             tracing::warn!("sync worker task ended abnormally: {e}");

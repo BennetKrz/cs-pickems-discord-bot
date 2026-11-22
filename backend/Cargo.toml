@@ -17,6 +17,7 @@ sources = { path = "crates/sources" }
 sync = { path = "crates/sync" }
 api = { path = "crates/api" }
 bot = { path = "crates/bot" }
+backup = { path = "crates/backup" }
 
 # external crates
 anyhow = "1.0.104"
@@ -45,6 +46,7 @@ tower-http = { version = "0.7.1", features = ["fs", "trace"] }
 tower_governor = { version = "0.8.0", default-features = false, features = ["axum"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json", "fmt"] }
+zstd = { version = "0.13.3", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

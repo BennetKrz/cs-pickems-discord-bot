@@ -41,6 +41,8 @@ pub struct BotDeps {
     pub reconciler: Arc<Reconciler>,
     /// The sync worker, for `/admin status`.
     pub sync: Option<SyncHandle>,
+    /// Backups (P4), for `/admin backup now` and `/admin status`.
+    pub backup: Option<backup::BackupService>,
     /// `DISCORD_GUILD_ID`: when set, the bot serves only this guild.
     pub guild_id: Option<String>,
 }
