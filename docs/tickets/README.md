@@ -43,7 +43,7 @@ Tickets on the same line can run in parallel.
 | [T12](T12-matches-views.md) | Matches overview and match detail | D | T07, T10, T11 | in review |
 | [T13](T13-event-bracket-view.md) | Event view with bracket tree | D | T07, T12 | in review |
 | [T14](T14-leaderboard.md) | Leaderboard | D | T11, T07 | in review |
-| [T15](T15-player-profile.md) | Player profile and pick history | D | T11, T14 | todo |
+| [T15](T15-player-profile.md) | Player profile and pick history | D | T11, T14 | in review |
 | [T16](T16-container-compose.md) | Container image and Raspberry Pi compose stack | E | T01 (can start early; finish after T07) | done |
 | [T17](T17-ci-cd-deployment.md) | CI/CD pipeline and automatic deployment | E | T16 | in review |
 

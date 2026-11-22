@@ -97,7 +97,7 @@ impl PartsDto {
         }
     }
 
-    fn from_parts(p: &PickParts) -> Self {
+    pub(crate) fn from_parts(p: &PickParts) -> Self {
         Self {
             winner_team_id: p.winner_team_id.map(|t| t.0),
             series: p.series.map(|s| Score { a: s.a, b: s.b }),

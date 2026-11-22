@@ -14,9 +14,11 @@ pub mod bot;
 pub mod events;
 pub mod guilds;
 pub mod leaderboard;
+#[macro_use]
 pub mod matches;
 pub mod pending_views;
 pub mod picks;
+pub mod profile;
 pub mod provenance;
 pub mod refs;
 mod row;

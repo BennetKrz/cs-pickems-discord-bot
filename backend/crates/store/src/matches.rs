@@ -387,7 +387,7 @@ fn team_from_prefixed(row: &SqliteRow, prefix: &str, id: Option<TeamId>) -> DbRe
     }))
 }
 
-fn list_item_from_row(row: SqliteRow) -> DbResult<MatchListItem> {
+pub(crate) fn list_item_from_row(row: SqliteRow) -> DbResult<MatchListItem> {
     let event_name = row.try_get("event_name")?;
     let stage_name = row.try_get("stage_name")?;
     let pick_count = row.try_get("pick_count")?;

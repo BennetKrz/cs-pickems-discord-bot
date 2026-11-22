@@ -190,13 +190,36 @@ describe('Leaderboard tab', () => {
     expect(me).toHaveAttribute('href', '/me')
     expect(bob).toHaveAttribute('href', `/members/${BOB}`)
 
+    // The name shows at once, before the profile has loaded.
     fireEvent.click(bob!)
     await pass()
     expect(screen.getByRole('heading', { name: 'Bob' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Profiles are coming soon' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: '← Leaderboard' }))
     await pass()
     expect(rows()).toHaveLength(2)
+  })
+
+  it('opens profiles with the same event filter', async () => {
+    serve()
+    boards['8'] = board(
+      [
+        lbRow({ user_id: BOB, display_name: 'Bob' }),
+        lbRow({ rank: 2, user_id: ME.user_id, display_name: 'ali' }),
+      ],
+      { event_id: 8 },
+    )
+    renderAt('/leaderboard?event=8')
+    await pass()
+    const [bob, me] = rows()
+    expect(me).toHaveAttribute('href', '/me?event=8')
+    expect(bob).toHaveAttribute('href', `/members/${BOB}?event=8`)
+
+    // The back link returns to the filtered board.
+    fireEvent.click(bob!)
+    await pass()
+    fireEvent.click(screen.getByRole('link', { name: '← Leaderboard' }))
+    await pass()
+    expect(screen.getByRole('combobox', { name: 'Show' })).toHaveValue('8')
   })
 
   it('filters by a followed event', async () => {
