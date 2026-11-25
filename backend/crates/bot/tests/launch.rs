@@ -78,3 +78,45 @@ async fn open_buttons_store_a_pending_view_for_ten_minutes() {
         None
     );
 }
+
+/// A global command as Discord's `GET /applications/{id}/commands` returns it.
+fn command(id: u64, kind: u8, handler: Option<u8>) -> serde_json::Value {
+    let mut c = serde_json::json!({
+        "id": id.to_string(),
+        "application_id": "300000000000000001",
+        "version": "400000000000000001",
+        "default_member_permissions": null,
+        "type": kind,
+        "name": if kind == 4 { "launch" } else { "other" },
+        "description": "",
+        "dm_permission": true,
+        "contexts": [0, 1, 2],
+        "integration_types": [0],
+        "nsfw": false,
+    });
+    if let Some(h) = handler {
+        c["handler"] = h.into();
+    }
+    c
+}
+
+fn commands(json: Vec<serde_json::Value>) -> Vec<poise::serenity_prelude::Command> {
+    serde_json::from_value(serde_json::Value::Array(json)).unwrap()
+}
+
+/// The App Launcher's Entry Point command is switched to the bot's handler
+/// once, so Discord stops posting a message on each launch (ADR 0019).
+#[test]
+fn only_an_entry_point_left_to_discord_is_claimed() {
+    use bot::launch::entry_point_to_claim;
+
+    // Discord's default: DISCORD_LAUNCH_ACTIVITY (2) → switch it.
+    let default = commands(vec![command(1, 1, None), command(2, 4, Some(2))]);
+    assert_eq!(entry_point_to_claim(&default).map(|id| id.get()), Some(2));
+    // Already APP_HANDLER (1) → nothing to do.
+    let claimed = commands(vec![command(2, 4, Some(1))]);
+    assert_eq!(entry_point_to_claim(&claimed), None);
+    // No Entry Point command (Activities off) → nothing to do.
+    let none = commands(vec![command(1, 1, None)]);
+    assert_eq!(entry_point_to_claim(&none), None);
+}

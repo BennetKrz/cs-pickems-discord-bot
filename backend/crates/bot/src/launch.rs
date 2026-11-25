@@ -5,6 +5,10 @@
 //! Discord documents no launch parameters, so a *Pick now* button for a
 //! match stores a pending view (member → match, 10 min); the Activity takes
 //! it on start through `GET /api/me/pending-view` and opens that match.
+//!
+//! The Entry Point command (App Launcher) is switched to `APP_HANDLER`, so
+//! the bot launches the Activity itself and Discord doesn't post a "… used
+//! Launch" message in the channel on every launch (ADR 0019).
 
 use chrono::{DateTime, Utc};
 use poise::serenity_prelude as serenity;
@@ -54,6 +58,50 @@ pub async fn handle_component(
             tracing::warn!(%guild, "cannot store the pending view: {e}");
         }
     }
+    c.create_response(
+        &ctx.http,
+        serenity::CreateInteractionResponse::LaunchActivity,
+    )
+    .await?;
+    Ok(())
+}
+
+/// Whether this command interaction is the app's Entry Point command (the
+/// App Launcher's "Launch").
+pub fn is_entry_point(c: &serenity::CommandInteraction) -> bool {
+    c.data.kind == serenity::CommandType::PrimaryEntryPoint
+}
+
+/// The Entry Point command that Discord still handles itself (and so
+/// announces every launch in the channel), if any.
+pub fn entry_point_to_claim(commands: &[serenity::Command]) -> Option<serenity::CommandId> {
+    commands
+        .iter()
+        .find(|c| c.kind == serenity::CommandType::PrimaryEntryPoint)
+        .filter(|c| c.handler != Some(serenity::EntryPointHandlerType::AppHandler))
+        .map(|c| c.id)
+}
+
+/// Switches the global Entry Point command to `APP_HANDLER`. Only `handler`
+/// is sent, so its name and description stay as they are. Does nothing when
+/// it is already switched.
+pub async fn claim_entry_point(http: &serenity::Http) -> anyhow::Result<()> {
+    let commands = http.get_global_commands().await?;
+    let Some(id) = entry_point_to_claim(&commands) else {
+        return Ok(());
+    };
+    let body = serde_json::json!({ "handler": serenity::EntryPointHandlerType::AppHandler });
+    http.edit_global_command(id, &body).await?;
+    tracing::info!("the Entry Point command now launches the Activity without a channel message");
+    Ok(())
+}
+
+/// Answers the Entry Point command by launching the Activity. Unlike
+/// Discord's own handler, this posts nothing in the channel.
+pub async fn handle_entry_point(
+    ctx: &serenity::Context,
+    c: &serenity::CommandInteraction,
+) -> anyhow::Result<()> {
     c.create_response(
         &ctx.http,
         serenity::CreateInteractionResponse::LaunchActivity,

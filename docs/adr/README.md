@@ -27,3 +27,4 @@ One short file per decision that shapes the code and isn't obvious from it. Agen
 | [0016](0016-leaderboard.md) | Leaderboard: tie-break, match days and rank change | accepted |
 | [0017](0017-event-view-and-brackets.md) | Event view: bracket positions, Swiss rounds and standings | accepted |
 | [0018](0018-player-profile.md) | Player profile and pick history | accepted |
+| [0019](0019-silent-entry-point.md) | Entry Point command launches without a channel message | accepted |
