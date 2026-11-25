@@ -1,6 +1,6 @@
 # 0013 – Bot commands, channel posts and Activity launch
 
-- **Status:** accepted
+- **Status:** accepted; decision 2 on the Entry Point command changed by [0019](0019-silent-entry-point.md)
 - **Date:** 2026-11-22
 - **Ticket:** T08
 

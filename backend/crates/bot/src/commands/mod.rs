@@ -122,6 +122,13 @@ pub fn error_text(error: &poise::FrameworkError<'_, Data, Error>) -> Option<Stri
 
 /// Replies ephemerally to failed commands and logs unexpected errors.
 pub async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
+    // poise doesn't know the Entry Point command; the event handler
+    // answers it (`launch::handle_entry_point`).
+    if let poise::FrameworkError::UnknownInteraction { interaction, .. } = &error
+        && crate::launch::is_entry_point(interaction)
+    {
+        return;
+    }
     if let poise::FrameworkError::Command { error: e, ctx, .. } = &error
         && e.downcast_ref::<UserError>().is_none()
     {

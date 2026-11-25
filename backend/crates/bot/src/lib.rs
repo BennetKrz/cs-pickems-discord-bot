@@ -2,14 +2,16 @@
 //! the Activity, and channel posts (daily digest, match results).
 //!
 //! - [`commands`]: `/leaderboard`, `/mypicks` and `/admin …`.
-//! - [`launch`]: button clicks → pending view + `LAUNCH_ACTIVITY`.
+//! - [`launch`]: button clicks → pending view + `LAUNCH_ACTIVITY`; the
+//!   Entry Point command → `LAUNCH_ACTIVITY` without a channel message.
 //! - [`announce`]: the digest and result posts, at most once each.
 //! - [`render`]: what posts say; [`discord`]: posts as Discord messages.
 //! - [`schedule`]: local digest time, bundling, nonces, parsing.
 //!
 //! The gateway connection needs no privileged intent (only `GUILDS`, to
 //! know the guilds to register commands in). Posts go over REST and don't
-//! wait for the gateway. See `docs/adr/0013-bot-announcements-launch.md`.
+//! wait for the gateway. See `docs/adr/0013-bot-announcements-launch.md`
+//! and `docs/adr/0019-silent-entry-point.md`.
 
 pub mod announce;
 pub mod commands;
@@ -120,6 +122,12 @@ async fn gateway(
                 for g in guilds {
                     register(ctx, &framework.options().commands, g).await;
                 }
+                if let Err(e) = launch::claim_entry_point(&ctx.http).await {
+                    tracing::warn!(
+                        "cannot switch the Entry Point command to the bot, so Discord keeps \
+                         posting a message on each launch: {e}"
+                    );
+                }
                 tracing::info!(user = %ready.user.name, "bot connected to the Discord gateway");
                 Ok(deps)
             })
@@ -144,7 +152,8 @@ async fn gateway(
 
 /// Registers the commands as guild commands, which update at once. The
 /// app's Entry Point command is global and created by Discord; guild
-/// commands don't touch it.
+/// commands don't touch it (only its handler is switched, by
+/// [`launch::claim_entry_point`]).
 async fn register(
     ctx: &serenity::Context,
     commands: &[poise::Command<Data, Error>],
@@ -168,6 +177,13 @@ async fn on_event(
         } => {
             if let Err(e) = launch::handle_component(ctx, c, data).await {
                 tracing::warn!(custom_id = %c.data.custom_id, "cannot launch the Activity: {e}");
+            }
+        }
+        serenity::FullEvent::InteractionCreate {
+            interaction: serenity::Interaction::Command(c),
+        } if launch::is_entry_point(c) => {
+            if let Err(e) = launch::handle_entry_point(ctx, c).await {
+                tracing::warn!("cannot launch the Activity from the Entry Point command: {e}");
             }
         }
         // A guild added after start-up gets the commands too.

@@ -26,7 +26,7 @@ The bot must be in the server: sign-in uses the bot token to check that the user
 
 ## 4. Activities
 
-1. **Activities → Settings**: turn on **Enable Activities**. Discord then creates the default *Entry Point* command ("Launch"), a global command that opens the Activity from the App Launcher. Leave it as it is: the bot registers its own commands per server and never touches global commands.
+1. **Activities → Settings**: turn on **Enable Activities**. Discord then creates the default *Entry Point* command ("Launch"), a global command that opens the Activity from the App Launcher. Leave it as it is. The bot registers its own commands per server. On start it changes one thing on this global command: its handler, so the bot launches the Activity itself and Discord doesn't post "… used Launch" in the channel on every launch ([ADR 0019](adr/0019-silent-entry-point.md)). Opening the Activity from the App Launcher therefore needs the bot to be running.
 2. **Activities → Settings → Supported Platforms**: tick **Web**, **iOS** and **Android**. An unticked platform doesn't show the Activity at all, and members use the Discord mobile apps too.
 3. **Activities → URL Mappings**: add **Prefix** `/` and **Target** your host *without* `https://`:
    - production: your public hostname, e.g. `pickem.example.com` (served on the Pi through the bundled Caddy or your Traefik; see [deploy/README.md](../deploy/README.md));
